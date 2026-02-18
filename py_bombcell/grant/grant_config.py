@@ -137,9 +137,11 @@ def notebook_runtime_context(cfg: Dict[str, Any]) -> Dict[str, Any]:
     for p in PROBE_LETTERS:
         context[f"probe{p}_Dir"] = str(cfg["probe_dirs"][p])
         context[f"probe{p}_continousDir"] = str(cfg["continuous_dat_paths"][p])
+        context[f"probe{p}_continuousDir"] = str(cfg["continuous_dat_paths"][p])
         context[f"probe{p}_kilosort4Dir"] = str(cfg["probe_kilosort_dirs"][p])
 
     context["continousDir"] = [str(cfg["continuous_dat_paths"][p]) for p in PROBE_LETTERS]
+    context["continuousDir"] = [str(cfg["continuous_dat_paths"][p]) for p in PROBE_LETTERS]
     context["kilosort_Dirs"] = [str(cfg["probe_kilosort_dirs"][p]) for p in PROBE_LETTERS]
     context["probeLetters"] = list(PROBE_LETTERS)
     context["structur_oebin"] = str(cfg["structure_oebin"])
