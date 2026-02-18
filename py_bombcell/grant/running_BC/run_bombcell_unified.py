@@ -109,15 +109,12 @@ def main() -> None:
     if args.mode == "batch":
         staging_root = cfg["default_ks_staging_root"]
         export_root = cfg["default_export_root"]
-        save_subdir = "DEFAULT"
     elif args.mode == "np20_rerun":
         staging_root = cfg["np20_ks_staging_root"]
         export_root = cfg["np20_export_root"]
-        save_subdir = "NP2_RERUN"
     else:
         staging_root = cfg["bombcell_singleprobe_root"]
         export_root = cfg["single_export_root"]
-        save_subdir = "SINGLE_PROBE"
 
     staged_dirs = stage_kilosort4(cfg["probe_kilosort_dirs"], staging_root, probes, overwrite=args.overwrite)
 
@@ -126,7 +123,7 @@ def main() -> None:
         ks_dir = staged_dirs[probe]
         raw_file = cfg["continuous_dat_paths"][probe]
         meta_file = cfg["structure_oebin"]
-        save_path = ks_dir / "bombcell" / save_subdir
+        save_path = ks_dir / "bombcell"
         save_path.mkdir(parents=True, exist_ok=True)
 
         print(f"\n=== Probe {probe} ({cfg['probe_regions'].get(probe, 'unknown region')}) ===")
