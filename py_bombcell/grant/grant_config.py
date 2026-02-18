@@ -23,6 +23,7 @@ DEFAULT_PROBE_BRAIN_REGIONS = {
     "E": "NP1.0 Substantia Nigra (SNR)",
     "F": "NP1.0 Reticular Nucleus",
 }
+DEFAULT_PROBE_RECORDING_ROI = {probe: None for probe in PROBE_LETTERS}
 
 
 def _as_path(value: str | Path) -> Path:
@@ -62,6 +63,8 @@ def load_grant_config(config_path: str | Path | None = None) -> Dict[str, Any]:
 
     probe_regions = dict(DEFAULT_PROBE_BRAIN_REGIONS)
     probe_regions.update(raw.get("probe_brain_regions", {}))
+    probe_recording_roi = dict(DEFAULT_PROBE_RECORDING_ROI)
+    probe_recording_roi.update(raw.get("probe_recording_roi", {}))
 
     np20_probes = raw.get("np20_probes", DEFAULT_NP20_PROBES)
     open_ephys_subpath = raw.get(
@@ -93,6 +96,7 @@ def load_grant_config(config_path: str | Path | None = None) -> Dict[str, Any]:
         "probes_all": list(PROBE_LETTERS),
         "np20_probes": list(np20_probes),
         "probe_regions": probe_regions,
+        "probe_recording_roi": probe_recording_roi,
         "probe_dirs": probe_dirs,
         "continuous_dat_paths": continuous_dat_paths,
         "probe_kilosort_dirs": probe_kilosort_dirs,
@@ -128,6 +132,7 @@ def notebook_runtime_context(cfg: Dict[str, Any]) -> Dict[str, Any]:
         "PROBES_ALL": cfg["probes_all"],
         "PROBES_NP20": cfg["np20_probes"],
         "PROBE_BRAIN_REGIONS": cfg["probe_regions"],
+        "PROBE_RECORDING_ROI": cfg["probe_recording_roi"],
         "PROBE_DIRS": cfg["probe_dirs"],
         "CONTINUOUS_DAT_PATHS": cfg["continuous_dat_paths"],
         "KILOSORT_DIRS": cfg["probe_kilosort_dirs"],
