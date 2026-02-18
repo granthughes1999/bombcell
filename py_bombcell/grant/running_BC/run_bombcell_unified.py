@@ -7,6 +7,7 @@ import traceback
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
+import numpy as np
 import pandas as pd
 
 import bombcell as bc
@@ -20,6 +21,43 @@ def _json_safe(obj: Any) -> Any:
     if isinstance(obj, Path):
         return str(obj)
     return obj
+
+
+def compute_roi_labels(
+    quality_metrics: Dict[str, Any],
+    ks_dir: Path,
+    roi_end_um: float,
+    tip_position: str = "min_y",
+    in_label: str = "IN_ROI",
+    out_label: str = "OUT_ROI",
+) -> np.ndarray:
+    if "maxChannels" not in quality_metrics:
+        raise KeyError("quality_metrics is missing required key 'maxChannels' for ROI labeling.")
+
+    ephys_data = bc.load_ephys_data(str(ks_dir))
+    channel_positions = ephys_data[6]
+    shank_y = channel_positions[:, 1].astype(float)
+    max_channels = np.asarray(quality_metrics["maxChannels"]).astype(int)
+
+    if np.any(max_channels < 0) or np.any(max_channels >= len(channel_positions)):
+        raise IndexError(f"Found maxChannels outside valid range for ks_dir={ks_dir}")
+
+    unit_y = channel_positions[max_channels, 1].astype(float)
+    if tip_position == "min_y":
+        dist_um = unit_y - float(np.nanmin(shank_y))
+    elif tip_position == "max_y":
+        dist_um = float(np.nanmax(shank_y)) - unit_y
+    else:
+        raise ValueError("tip_position must be 'min_y' or 'max_y'.")
+
+    return np.where(dist_um <= float(roi_end_um), in_label, out_label)
+
+
+def save_phy_roi_labels(ks_dir: Path, cluster_ids: np.ndarray, roi_labels: np.ndarray) -> None:
+    out_tsv = ks_dir / "cluster_bc_roiLabel.tsv"
+    pd.DataFrame({"cluster_id": cluster_ids.astype(int), "bc_roiLabel": roi_labels}).to_csv(
+        out_tsv, sep="\t", index=False
+    )
 
 
 def stage_kilosort4(source_dirs: Dict[str, Path], dst_root: Path, probes: Iterable[str], overwrite: bool) -> Dict[str, Path]:
@@ -57,6 +95,8 @@ def export_results(results: Dict[str, Dict[str, Any]], output_root: Path, probes
         qm = pd.DataFrame(entry["quality_metrics"]).reset_index().rename(columns={"index": "cluster_id"})
         unit_types = pd.Series(entry["unit_type_string"], name="Bombcell_unit_type")
         qm.insert(0, "Bombcell_unit_type", unit_types)
+        if "roi_label" in entry and len(entry["roi_label"]) == len(qm):
+            qm.insert(1, "bc_roiLabel", pd.Series(entry["roi_label"]))
 
         qm_path = probe_out / f"Probe_{probe}_quality_metrics.csv"
         counts_path = probe_out / f"Probe_{probe}_unit_type_counts.csv"
@@ -139,6 +179,18 @@ def main() -> None:
             param.update(overrides)
 
             quality_metrics, param_out, unit_type, unit_type_string = bc.run_bombcell(str(ks_dir), str(save_path), param)
+            roi_label = None
+            roi_end = cfg.get("probe_recording_roi", {}).get(probe)
+            if roi_end is not None:
+                roi_label = compute_roi_labels(quality_metrics, ks_dir, roi_end_um=float(roi_end), tip_position="min_y")
+                cluster_ids = np.asarray(param_out.get("unique_templates", np.arange(len(roi_label))))
+                if len(cluster_ids) == len(roi_label):
+                    save_phy_roi_labels(ks_dir, cluster_ids, roi_label)
+                else:
+                    print(
+                        f"Skipping cluster_bc_roiLabel.tsv for probe {probe}: "
+                        f"cluster_ids length ({len(cluster_ids)}) != roi labels ({len(roi_label)})"
+                    )
             results[probe] = {
                 "ks_dir": ks_dir,
                 "save_path": save_path,
@@ -146,6 +198,7 @@ def main() -> None:
                 "param": param_out,
                 "unit_type": unit_type,
                 "unit_type_string": unit_type_string,
+                "roi_label": roi_label,
             }
             print(pd.Series(unit_type_string).value_counts())
         except Exception as exc:

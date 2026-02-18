@@ -41,6 +41,11 @@ For simultaneous all-probe analysis with ROI-aware tables/plots, use:
 3. Units above threshold are `OUTSIDE_ROI`.
 4. If ROI is unset (`None`), the notebook marks units as `ROI_NOT_SET`.
 
+When running via the unified Grant runner and `probe_recording_roi` is set, Phy gets:
+- `cluster_bc_roiLabel.tsv` in each probe Kilosort folder
+- column name: `bc_roiLabel`
+- values: `IN_ROI` / `OUT_ROI`
+
 ## 2) Shared recording config
 - Copy `grant/configs/grant_recording_config.example.json` to a per-recording config file.
 - Update recording paths once, then use the same config for both run and post-analysis notebooks.
