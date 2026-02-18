@@ -40,7 +40,18 @@
       }
     }
   },
-  "probe_param_overrides": {
+  "probe_param_overrides": { 
+    "A": {
+      "all_modes": {
+        "maxNPeaks": 4,
+        "maxNTroughs": 3,
+        "maxWvBaselineFraction": 0.5,
+        "maxRPVviolations": 0.3,
+        "minPresenceRatio": 0.5,
+        "presenceRatioBinSize": 120,
+        "nChannelsIsoDist": 8
+      }
+    },   
     "B": {
       "all_modes": {
         "maxRPVviolations": 0.2,
@@ -52,7 +63,29 @@
         "computeTimeChunks": true,
         "deltaTimeChunk": 360
       }
-    }
+    },
+    "C": {
+      "all_modes": {
+        "maxNPeaks": 4,
+        "maxNTroughs": 3,
+        "maxWvBaselineFraction": 0.5,
+        "maxRPVviolations": 0.3,
+        "minPresenceRatio": 0.5,
+        "presenceRatioBinSize": 120,
+        "nChannelsIsoDist": 6
+      }
+    },       
+    "D": {
+      "all_modes": {
+        "maxNPeaks": 4,
+        "maxNTroughs": 3,
+        "maxWvBaselineFraction": 0.5,
+        "maxRPVviolations": 0.3,
+        "minPresenceRatio": 0.5,
+        "presenceRatioBinSize": 120,
+        "nChannelsIsoDist": 4
+      }
+    }   
   },
   "custom_channel_map_notes": "If your 4-shank NP2.0 channel map is non-default, update probe_stream_names and set per-probe nChannels / nSyncChannels overrides if needed. Use structure.oebin from the same recording so Bombcell reads the matching metadata."
 }
