@@ -99,6 +99,9 @@ Bombcell is under the open-source [copyleft](https://www.gnu.org/licenses/copyle
 ### 📬 Contact us
 
 If you run into any issues or if you have any suggestions, please raise a [github issue](https://github.com/Julie-Fabre/bombcell/issues) or create a [pull request](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request). You can also use the [Neuropixels slack workgroup](https://join.slack.com/t/neuropixelsgroup/shared_invite/zt-2h3sp1nfr-JZrpKWxeVptI0EPbHAoxKA).
+
+If you are using GitHub Copilot coding sessions with GitHub Desktop: agent changes are pushed to the branch on GitHub (remote) first. To get them locally, make sure you are on the same branch in GitHub Desktop, then click **Fetch origin** and **Pull origin**. If nothing changes, check that Desktop is on the PR branch the agent updated.
+
 Please star the project to support us, using the top-right "⭐ Star" button.
 
 

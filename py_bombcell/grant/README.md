@@ -13,6 +13,7 @@ python grant/running_BC/run_bombcell_unified.py --config grant/configs/grant_rec
 For notebook-based per-probe parameter edits and post-run reloads, use:
 
 - `grant/running_BC/BC_probe_param_and_reload.ipynb`
+- `grant/running_BC/BC_add_roi_labels_to_phy.ipynb` (retroactively writes `cluster_bc_roiLabel.tsv` with `IN_ROI` / `OUT_ROI` for Phy without rerunning Bombcell)
 
 This notebook shows how to:
 - edit `probe_param_overrides` / `mode_param_overrides` directly in notebook cells,
@@ -29,6 +30,9 @@ ROI labeling helper is available in:
 
 For class-by-class explanation of why each unit is GOOD/MUA/NOISE/NON-SOMATIC, use:
 - `grant/analyzing_BC_results/BC_classification_reason_audit.ipynb`
+
+To inspect recording-level Open Ephys metadata (`structure.oebin`) and verify probe streams, use:
+- `grant/analyzing_BC_results/BC_inspect_structure_oebin.ipynb`
 
 For simultaneous all-probe analysis with ROI-aware tables/plots, use:
 - `grant/analyzing_BC_results/BC_all_probes_roi_dashboard.ipynb`
@@ -67,6 +71,18 @@ For non-default channel maps:
 2. Set probe stream names in `probe_stream_names` so each probe points to the right Open Ephys stream.
 3. If channel counts differ from defaults, set `nChannels` / `nSyncChannels` in `probe_param_overrides`.
 4. Keep NP2 rerun-specific waveform/quality threshold overrides in `mode_param_overrides.np20_rerun`.
+
+### Why custom channel maps can affect Bombcell
+- Bombcell quality metrics depend on unit waveforms and unit location on the probe (`maxChannels`, `channel_positions`).
+- If Kilosort + Open Ephys metadata are aligned to the same custom map, Bombcell should work normally (it uses those outputs/metadata directly).
+- If map metadata is mismatched (wrong stream, wrong `structure.oebin`, wrong channel counts), channel geometry and waveform extraction can be wrong, which can shift ROI labels and quality classification.
+
+### Practical NP2.0 optimization checks (A/C/D)
+1. Keep map provenance together per probe/run: NeuroCarto export (`.imro`/`.json`), Open Ephys stream, Kilosort folder.
+2. Confirm each probe path in config resolves to the intended stream (`probe_stream_names`) and recording metadata (`structure_oebin_subpath`).
+3. For each NP2.0 probe with custom map, set probe-specific `nChannels` / `nSyncChannels` in `probe_param_overrides` when they differ.
+4. Use `mode_param_overrides.np20_rerun` for conservative waveform-shape thresholds on custom layouts, then compare unit-type counts in exported summaries before/after.
+5. Keep per-probe ROI (`probe_recording_roi`) updated so `cluster_bc_roiLabel.tsv` and post-analysis ROI labels reflect the true sampled depth for that custom layout.
 
 ## 5) Suggested maintenance checks in the broader repo
 - Keep `py_bombcell` and `matlab` parameter choices aligned for equivalent experiments.
