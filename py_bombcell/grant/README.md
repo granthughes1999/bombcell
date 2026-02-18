@@ -31,6 +31,9 @@ ROI labeling helper is available in:
 For class-by-class explanation of why each unit is GOOD/MUA/NOISE/NON-SOMATIC, use:
 - `grant/analyzing_BC_results/BC_classification_reason_audit.ipynb`
 
+To inspect recording-level Open Ephys metadata (`structure.oebin`) and verify probe streams, use:
+- `grant/analyzing_BC_results/BC_inspect_structure_oebin.ipynb`
+
 For simultaneous all-probe analysis with ROI-aware tables/plots, use:
 - `grant/analyzing_BC_results/BC_all_probes_roi_dashboard.ipynb`
 
