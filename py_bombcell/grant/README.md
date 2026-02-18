@@ -20,6 +20,10 @@ This notebook shows how to:
 - rerun `bc.plot_summary_data(...)`, `bc.compare_manual_vs_bombcell(save_path)`, and `bc.unit_quality_gui(...)`.
 - label units by tip-distance ROI as `IN_ROI` / `OUTSIDE_ROI` (example: tip→950um on Probe B).
 
+Bombcell save path convention (current):
+- all run modes save directly to `.../kilosort4_<probe>/bombcell/`
+- no nested run subfolders (`DEFAULT`, `NP2_RERUN`, `SINGLE_PROBE`)
+
 ROI labeling helper is available in:
 - `grant/analyzing_BC_results/post_analysis_setup.py` → `label_units_by_tip_distance(...)`
 
