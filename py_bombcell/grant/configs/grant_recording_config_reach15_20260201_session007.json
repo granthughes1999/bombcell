@@ -16,9 +16,17 @@
     "A": "NP2.0 Simplex Lobule & Interposed Nucleus (SIM/IP)",
     "B": "NP1.0 Pontine Gray (PG)",
     "C": "NP2.0 Motor Cortex (MoP)",
-    "D": "NP2.0 The Ventral Anterior-Lateral complex (VA/VL) of the thalamus ",
+    "D": "NP2.0 The Ventral Anterior-Lateral complex (VA/VL) of the thalamus",
     "E": "NP1.0 Substantia Nigra Pars Reticulata (SnR)",
     "F": "NP1.0 Red Nucleus (RN)"
+  },
+  "probe_recording_roi": {
+    "A": 3450,
+    "B": 950,
+    "C": 1800,
+    "D": 1400,
+    "E": 800,
+    "F": 1120
   },
   "mode_param_overrides": {
     "np20_rerun": {

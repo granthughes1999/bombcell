@@ -13,12 +13,12 @@
   },
   "np20_probes": ["A", "C", "D"],
   "probe_brain_regions": {
-    "A": "NP2.0 Simplex Lobule & Interposed Nucleus",
-    "B": "NP1.0 Pontine Nuclei",
-    "C": "NP2.0 Motor Cortex",
-    "D": "NP2.0 Ventral Anterior Lateral complex of the thalamus",
-    "E": "NP1.0 Substantia Nigra (SNR)",
-    "F": "NP1.0 Reticular Nucleus"
+    "A": "NP2.0 Simplex Lobule & Interposed Nucleus (SIM/IP)",
+    "B": "NP1.0 Pontine Gray (PG)",
+    "C": "NP2.0 Motor Cortex (MoP)",
+    "D": "NP2.0 The Ventral Anterior-Lateral complex (VA/VL) of the thalamus ",
+    "E": "NP1.0 Substantia Nigra Pars Reticulata (SnR)",
+    "F": "NP1.0 Red Nucleus (RN)"
   },
   "mode_param_overrides": {
     "np20_rerun": {
