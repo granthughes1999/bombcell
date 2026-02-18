@@ -30,6 +30,16 @@ ROI labeling helper is available in:
 For class-by-class explanation of why each unit is GOOD/MUA/NOISE/NON-SOMATIC, use:
 - `grant/analyzing_BC_results/BC_classification_reason_audit.ipynb`
 
+For simultaneous all-probe analysis with ROI-aware tables/plots, use:
+- `grant/analyzing_BC_results/BC_all_probes_roi_dashboard.ipynb`
+
+### IN_ROI / OUTSIDE_ROI usage
+`IN_ROI` / `OUTSIDE_ROI` labels come from distance-to-tip thresholds:
+1. Set per-probe ROI lengths (um from tip) in the notebook dictionary `ROI_END_UM_BY_PROBE`.
+2. For each probe, units with `distance_from_tip_um <= ROI_END_UM_BY_PROBE[probe]` are `IN_ROI`.
+3. Units above threshold are `OUTSIDE_ROI`.
+4. If ROI is unset (`None`), the notebook marks units as `ROI_NOT_SET`.
+
 ## 2) Shared recording config
 - Copy `grant/configs/grant_recording_config.example.json` to a per-recording config file.
 - Update recording paths once, then use the same config for both run and post-analysis notebooks.
