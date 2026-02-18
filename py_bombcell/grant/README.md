@@ -69,6 +69,18 @@ For non-default channel maps:
 3. If channel counts differ from defaults, set `nChannels` / `nSyncChannels` in `probe_param_overrides`.
 4. Keep NP2 rerun-specific waveform/quality threshold overrides in `mode_param_overrides.np20_rerun`.
 
+### Why custom channel maps can affect Bombcell
+- Bombcell quality metrics depend on unit waveforms and unit location on the probe (`maxChannels`, `channel_positions`).
+- If Kilosort + Open Ephys metadata are aligned to the same custom map, Bombcell should work normally (it uses those outputs/metadata directly).
+- If map metadata is mismatched (wrong stream, wrong `structure.oebin`, wrong channel counts), channel geometry and waveform extraction can be wrong, which can shift ROI labels and quality classification.
+
+### Practical NP2.0 optimization checks (A/C/D)
+1. Keep map provenance together per probe/run: NeuroCarto export (`.imro`/`.json`), Open Ephys stream, Kilosort folder.
+2. Confirm each probe path in config resolves to the intended stream (`probe_stream_names`) and recording metadata (`structure_oebin_subpath`).
+3. For each NP2.0 probe with custom map, set probe-specific `nChannels` / `nSyncChannels` in `probe_param_overrides` when they differ.
+4. Use `mode_param_overrides.np20_rerun` for conservative waveform-shape thresholds on custom layouts, then compare unit-type counts in exported summaries before/after.
+5. Keep per-probe ROI (`probe_recording_roi`) updated so `cluster_bc_roiLabel.tsv` and post-analysis ROI labels reflect the true sampled depth for that custom layout.
+
 ## 5) Suggested maintenance checks in the broader repo
 - Keep `py_bombcell` and `matlab` parameter choices aligned for equivalent experiments.
 - Preserve one exported summary per run (`batch_summary.csv`) for traceable reruns.
