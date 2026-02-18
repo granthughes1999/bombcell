@@ -35,10 +35,16 @@ For simultaneous all-probe analysis with ROI-aware tables/plots, use:
 
 ### IN_ROI / OUTSIDE_ROI usage
 `IN_ROI` / `OUTSIDE_ROI` labels come from distance-to-tip thresholds:
-1. Set per-probe ROI lengths (um from tip) in the notebook dictionary `ROI_END_UM_BY_PROBE`.
-2. For each probe, units with `distance_from_tip_um <= ROI_END_UM_BY_PROBE[probe]` are `IN_ROI`.
+1. Store per-probe ROI lengths (um from tip) in config JSON under `probe_recording_roi`.
+2. Notebooks load these defaults automatically, and you can still override in-notebook (`ROI_OVERRIDE_BY_PROBE` / `ROI_END_UM_OVERRIDE`).
+3. For each probe, units with `distance_from_tip_um <= ROI_END_UM_BY_PROBE[probe]` are `IN_ROI`.
 3. Units above threshold are `OUTSIDE_ROI`.
 4. If ROI is unset (`None`), the notebook marks units as `ROI_NOT_SET`.
+
+When running via the unified Grant runner and `probe_recording_roi` is set, Phy gets:
+- `cluster_bc_roiLabel.tsv` in each probe Kilosort folder
+- column name: `bc_roiLabel`
+- values: `IN_ROI` / `OUT_ROI`
 
 ## 2) Shared recording config
 - Copy `grant/configs/grant_recording_config.example.json` to a per-recording config file.
