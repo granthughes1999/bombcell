@@ -170,15 +170,6 @@ def main() -> None:
         raw_file = cfg["continuous_dat_paths"][probe]
         meta_file = cfg["structure_oebin"]
         save_path = ks_dir / "bombcell"
-        print(f'============================================')
-        print(f'Processing probe {probe}')
-        print('--------------------------')
-        print('ks_dir:', ks_dir)
-        print('raw_file:', raw_file)
-        print('meta_file:', meta_file)
-        print(f"Creating save_path: {save_path}")
-        print(f'============================================')
-
         save_path.mkdir(parents=True, exist_ok=True)
 
         print(f"\n=== Probe {probe} ({cfg['probe_regions'].get(probe, 'unknown region')}) ===")
