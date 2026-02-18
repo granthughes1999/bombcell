@@ -16,15 +16,23 @@ DEFAULT_PROBE_STREAM_NAMES = {
     "F": "Neuropix-PXI-100.ProbeF-AP",
 }
 DEFAULT_PROBE_BRAIN_REGIONS = {
-    "A": "NP2.0 Simplex Lobule & Interposed Nucleus",
-    "B": "NP1.0 Pontine Nuclei",
-    "C": "NP2.0 Motor Cortex",
-    "D": "NP2.0 Ventral Anterior Lateral complex of the thalamus",
-    "E": "NP1.0 Substantia Nigra (SNR)",
-    "F": "NP1.0 Reticular Nucleus"
+    "A": "NP2.0 Simplex Lobule & Interposed Nucleus (SIM/IP)",
+    "B": "NP1.0 Pontine Gray (PG)",
+    "C": "NP2.0 Motor Cortex (MoP)",
+    "D": "NP2.0 The Ventral Anterior-Lateral complex (VA/VL) of the thalamus ",
+    "E": "NP1.0 Substantia Nigra Pars Reticulata (SnR)",
+    "F": "NP1.0 Red Nucleus (RN)"
 }
 DEFAULT_PROBE_RECORDING_ROI = {probe: None for probe in PROBE_LETTERS}
+DEFAULT_PROBE_CH_ROI = {
+    "A": 3450,
+    "B": 950,
+    "C": 1800,
+    "D": 1400,
+    "E": 800,
+    "F": 1120
 
+}
 def _as_path(value: str | Path) -> Path:
     return value if isinstance(value, Path) else Path(value)
 
