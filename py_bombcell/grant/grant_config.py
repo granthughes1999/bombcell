@@ -21,9 +21,8 @@ DEFAULT_PROBE_BRAIN_REGIONS = {
     "C": "NP2.0 Motor Cortex",
     "D": "NP2.0 Ventral Anterior Lateral complex of the thalamus",
     "E": "NP1.0 Substantia Nigra (SNR)",
-    "F": "NP1.0 Reticular Nucleus",
+    "F": "NP1.0 Reticular Nucleus"
 }
-
 
 def _as_path(value: str | Path) -> Path:
     return value if isinstance(value, Path) else Path(value)
@@ -99,8 +98,8 @@ def load_grant_config(config_path: str | Path | None = None) -> Dict[str, Any]:
         "bombcell_default_root": bombcell_default_root,
         "bombcell_np20_root": bombcell_np20_root,
         "bombcell_singleprobe_root": bombcell_singleprobe_root,
-        "default_ks_staging_root": bombcell_default_root / "DUPLICATED_KILOSORT4_FILES",
-        "np20_ks_staging_root": bombcell_np20_root / "DUPLICATED_KILOSORT4_FILES_ACD",
+        "default_ks_staging_root": bombcell_default_root,
+        "np20_ks_staging_root": bombcell_np20_root,
         "default_export_root": bombcell_default_root / "batch_DEFAULT_results",
         "np20_export_root": bombcell_np20_root / "NP2_ReRun_results",
         "single_export_root": bombcell_singleprobe_root / "single_probe_results",
