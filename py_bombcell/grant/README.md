@@ -23,6 +23,9 @@ This notebook shows how to:
 ROI labeling helper is available in:
 - `grant/analyzing_BC_results/post_analysis_setup.py` → `label_units_by_tip_distance(...)`
 
+For class-by-class explanation of why each unit is GOOD/MUA/NOISE/NON-SOMATIC, use:
+- `grant/analyzing_BC_results/BC_classification_reason_audit.ipynb`
+
 ## 2) Shared recording config
 - Copy `grant/configs/grant_recording_config.example.json` to a per-recording config file.
 - Update recording paths once, then use the same config for both run and post-analysis notebooks.
