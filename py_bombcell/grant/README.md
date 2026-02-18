@@ -18,6 +18,10 @@ This notebook shows how to:
 - edit `probe_param_overrides` / `mode_param_overrides` directly in notebook cells,
 - resolve `ks_dir` and `save_path` for a specific mode/probe,
 - rerun `bc.plot_summary_data(...)`, `bc.compare_manual_vs_bombcell(save_path)`, and `bc.unit_quality_gui(...)`.
+- label units by tip-distance ROI as `IN_ROI` / `OUTSIDE_ROI` (example: tip→950um on Probe B).
+
+ROI labeling helper is available in:
+- `grant/analyzing_BC_results/post_analysis_setup.py` → `label_units_by_tip_distance(...)`
 
 ## 2) Shared recording config
 - Copy `grant/configs/grant_recording_config.example.json` to a per-recording config file.
