@@ -34,6 +34,7 @@ Take a look at:
 - the MATLAB live script [`gettingStarted`](https://github.com/Julie-Fabre/bombcell/tree/main/matlab/gettingStarted.mlx) to see an example workflow and play around with our small toy dataset.
 - the Python Jupyter notebook [`BC_demo`](https://github.com/Julie-Fabre/bombcell/blob/main/py_bombcell/demos/BC_demo_toy_data.ipynb) and software specific ones : [`BC_demo_spikeGLX`](https://github.com/Julie-Fabre/bombcell/blob/main/py_bombcell/demos/BC_demo_spikeGLX.ipynb) ,
 [`BC_demo_open_ephys`](https://github.com/Julie-Fabre/bombcell/blob/main/py_bombcell/demos/BC_demo_open_ephys.ipynb) and [`BC_demo_other_recording_software`](https://github.com/Julie-Fabre/bombcell/blob/main/py_bombcell/demos/BC_demo_other_recording_software.ipynb) 
+- NP2 custom map utility notebook: [`NP2_channel_map_geometry_checker`](https://github.com/Julie-Fabre/bombcell/blob/main/py_bombcell/demos/NP2_channel_map_geometry_checker.ipynb) to visualize and sanity-check `channel_positions.npy` geometry.
 - You can also take a look at the exercise we prepared for the 2024 Neuropixels course [here](https://github.com/BombCell/Neuropixels_course_2024). 
 
 #### Installation
