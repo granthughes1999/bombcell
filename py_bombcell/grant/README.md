@@ -13,6 +13,7 @@ python grant/running_BC/run_bombcell_unified.py --config grant/configs/grant_rec
 For notebook-based per-probe parameter edits and post-run reloads, use:
 
 - `grant/running_BC/BC_probe_param_and_reload.ipynb`
+- `grant/running_BC/BC_add_roi_labels_to_phy.ipynb` (retroactively writes `cluster_bc_roiLabel.tsv` with `IN_ROI` / `OUT_ROI` for Phy without rerunning Bombcell)
 
 This notebook shows how to:
 - edit `probe_param_overrides` / `mode_param_overrides` directly in notebook cells,
