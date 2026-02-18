@@ -4,7 +4,7 @@
 Use one runner for all three workflows:
 
 ```bash
-cd /home/runner/work/bombcell/bombcell/py_bombcell
+cd C:\Users\user\Documents\github\bombcell\py_bombcell
 python grant/running_BC/run_bombcell_unified.py --config grant/configs/grant_recording_config.json --mode batch
 python grant/running_BC/run_bombcell_unified.py --config grant/configs/grant_recording_config.json --mode single_probe --target-probe B
 python grant/running_BC/run_bombcell_unified.py --config grant/configs/grant_recording_config.json --mode np20_rerun
