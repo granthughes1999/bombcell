@@ -16,6 +16,8 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from grant_config import get_probe_mode_overrides, load_grant_config
 
+BC_ROI_LABEL_COLUMN = "bc_roiLabel"
+
 
 def _json_safe(obj: Any) -> Any:
     if isinstance(obj, Path):
@@ -32,7 +34,9 @@ def compute_roi_labels(
     out_label: str = "OUT_ROI",
 ) -> np.ndarray:
     if "maxChannels" not in quality_metrics:
-        raise KeyError("quality_metrics is missing required key 'maxChannels' for ROI labeling.")
+        raise KeyError(
+            f"quality_metrics is missing required key 'maxChannels' for ROI labeling (ks_dir={str(ks_dir)})."
+        )
 
     ephys_data = bc.load_ephys_data(str(ks_dir))
     channel_positions = ephys_data[6]
@@ -40,7 +44,9 @@ def compute_roi_labels(
     max_channels = np.asarray(quality_metrics["maxChannels"]).astype(int)
 
     if np.any(max_channels < 0) or np.any(max_channels >= len(channel_positions)):
-        raise IndexError(f"Found maxChannels outside valid range for ks_dir={ks_dir}")
+        raise IndexError(
+            f"Found maxChannels outside valid range [0, {len(channel_positions)}) for ks_dir={str(ks_dir)}"
+        )
 
     unit_y = channel_positions[max_channels, 1].astype(float)
     if tip_position == "min_y":
@@ -55,7 +61,7 @@ def compute_roi_labels(
 
 def save_phy_roi_labels(ks_dir: Path, cluster_ids: np.ndarray, roi_labels: np.ndarray) -> None:
     out_tsv = ks_dir / "cluster_bc_roiLabel.tsv"
-    pd.DataFrame({"cluster_id": cluster_ids.astype(int), "bc_roiLabel": roi_labels}).to_csv(
+    pd.DataFrame({"cluster_id": cluster_ids.astype(int), BC_ROI_LABEL_COLUMN: roi_labels}).to_csv(
         out_tsv, sep="\t", index=False
     )
 
@@ -96,7 +102,7 @@ def export_results(results: Dict[str, Dict[str, Any]], output_root: Path, probes
         unit_types = pd.Series(entry["unit_type_string"], name="Bombcell_unit_type")
         qm.insert(0, "Bombcell_unit_type", unit_types)
         if "roi_label" in entry and len(entry["roi_label"]) == len(qm):
-            qm.insert(1, "bc_roiLabel", pd.Series(entry["roi_label"]))
+            qm.insert(1, BC_ROI_LABEL_COLUMN, pd.Series(entry["roi_label"]))
 
         qm_path = probe_out / f"Probe_{probe}_quality_metrics.csv"
         counts_path = probe_out / f"Probe_{probe}_unit_type_counts.csv"
@@ -180,16 +186,29 @@ def main() -> None:
 
             quality_metrics, param_out, unit_type, unit_type_string = bc.run_bombcell(str(ks_dir), str(save_path), param)
             roi_label = None
-            roi_end = cfg.get("probe_recording_roi", {}).get(probe)
+            # dict mapping probe name to max IN_ROI distance from tip (um)
+            # current ROI labeling uses compute_roi_labels default tip_position='min_y'
+            roi_config = cfg.get("probe_recording_roi", {})
+            roi_end = roi_config.get(probe)
             if roi_end is not None:
-                roi_label = compute_roi_labels(quality_metrics, ks_dir, roi_end_um=float(roi_end), tip_position="min_y")
-                cluster_ids = np.asarray(param_out.get("unique_templates", np.arange(len(roi_label))))
+                roi_label = compute_roi_labels(quality_metrics, ks_dir, roi_end_um=float(roi_end))
+                # unique_templates is the canonical per-row unit ID order produced by Bombcell.
+                # phy_clusterID is used as a fallback when unique_templates is unavailable.
+                if "unique_templates" in param_out:
+                    cluster_ids = np.asarray(param_out["unique_templates"])
+                elif "phy_clusterID" in quality_metrics:
+                    cluster_ids = np.asarray(quality_metrics["phy_clusterID"])
+                else:
+                    raise KeyError(
+                        f"Could not determine cluster IDs for ROI label export for probe {probe}. "
+                        "Expected param_out['unique_templates'] or quality_metrics['phy_clusterID']."
+                    )
                 if len(cluster_ids) == len(roi_label):
                     save_phy_roi_labels(ks_dir, cluster_ids, roi_label)
                 else:
-                    print(
-                        f"Skipping cluster_bc_roiLabel.tsv for probe {probe}: "
-                        f"cluster_ids length ({len(cluster_ids)}) != roi labels ({len(roi_label)})"
+                    raise ValueError(
+                        f"cluster_bc_roiLabel.tsv export failed for probe {probe}: "
+                        f"cluster_ids length ({len(cluster_ids)}) != roi_labels length ({len(roi_label)})."
                     )
             results[probe] = {
                 "ks_dir": ks_dir,
