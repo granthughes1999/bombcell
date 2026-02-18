@@ -11,6 +11,7 @@ import bombcell as bc
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from grant_config import load_grant_config, notebook_runtime_context  # noqa: E402
 
+# Indices in tuple returned by bc.load_ephys_data(...)
 Y_COORDINATE_INDEX = 1
 CHANNEL_POSITIONS_INDEX = 6
 
@@ -58,7 +59,12 @@ def label_units_by_tip_distance(
     if "maxChannels" not in qm_df.columns:
         raise KeyError("quality_metrics must include a 'maxChannels' column.")
 
-    ephys_data = bc.load_ephys_data(str(ks_dir))  # tuple shape follows bc.load_ephys_data docs
+    ephys_data = bc.load_ephys_data(str(ks_dir))  # (spike_times, spike_clusters, templates, amplitudes, pc_features, pc_feature_idx, channel_positions)
+    if len(ephys_data) <= CHANNEL_POSITIONS_INDEX:
+        raise ValueError(
+            f"Unexpected ephys_data tuple length ({len(ephys_data)}), "
+            f"expected > {CHANNEL_POSITIONS_INDEX} to access channel positions."
+        )
     channel_positions = ephys_data[CHANNEL_POSITIONS_INDEX]
     shank_y = channel_positions[:, Y_COORDINATE_INDEX].astype(float)
     max_channels = qm_df["maxChannels"].astype(int).to_numpy()
