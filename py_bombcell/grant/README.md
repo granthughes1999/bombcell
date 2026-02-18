@@ -10,6 +10,15 @@ python grant/running_BC/run_bombcell_unified.py --config grant/configs/grant_rec
 python grant/running_BC/run_bombcell_unified.py --config grant/configs/grant_recording_config.json --mode np20_rerun
 ```
 
+For notebook-based per-probe parameter edits and post-run reloads, use:
+
+- `grant/running_BC/BC_probe_param_and_reload.ipynb`
+
+This notebook shows how to:
+- edit `probe_param_overrides` / `mode_param_overrides` directly in notebook cells,
+- resolve `ks_dir` and `save_path` for a specific mode/probe,
+- rerun `bc.plot_summary_data(...)`, `bc.compare_manual_vs_bombcell(save_path)`, and `bc.unit_quality_gui(...)`.
+
 ## 2) Shared recording config
 - Copy `grant/configs/grant_recording_config.example.json` to a per-recording config file.
 - Update recording paths once, then use the same config for both run and post-analysis notebooks.
