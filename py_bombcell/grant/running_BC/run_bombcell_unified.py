@@ -19,11 +19,48 @@ from grant_config import get_probe_mode_overrides, load_grant_config
 BC_ROI_LABEL_COLUMN = "bc_roiLabel"
 
 
-def _json_safe(obj: Any) -> Any:
+# def _json_safe(obj: Any) -> Any:
+#     if isinstance(obj, Path):
+#         return str(obj)
+#     return obj
+
+# new code
+def _to_jsonable(obj: Any, _seen: set[int] | None = None) -> Any:
+    if _seen is None:
+        _seen = set()
+
+    oid = id(obj)
+    if isinstance(obj, (dict, list, tuple, set)):
+        if oid in _seen:
+            return "<CIRCULAR_REF>"
+        _seen.add(oid)
+
     if isinstance(obj, Path):
         return str(obj)
-    return obj
 
+    # numpy scalars/arrays
+    if isinstance(obj, np.generic):
+        return obj.item()
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+
+    # pandas objects (if any leak into param_out)
+    if isinstance(obj, (pd.Series, pd.Index)):
+        return obj.tolist()
+    if isinstance(obj, pd.DataFrame):
+        return obj.to_dict(orient="list")
+
+    if isinstance(obj, dict):
+        return {str(k): _to_jsonable(v, _seen) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple, set)):
+        return [_to_jsonable(v, _seen) for v in obj]
+
+    # allow JSON-native types
+    if obj is None or isinstance(obj, (str, int, float, bool)):
+        return obj
+
+    # fallback: stringify unknown objects
+    return repr(obj)
 
 def compute_roi_labels(
     quality_metrics: Dict[str, Any],
@@ -114,8 +151,9 @@ def export_results(results: Dict[str, Dict[str, Any]], output_root: Path, probes
         qm.to_csv(qm_path, index=False)
         counts = unit_types.value_counts().rename_axis("unit_type").reset_index(name="count")
         counts.to_csv(counts_path, index=False)
+        # new code
         with param_path.open("w", encoding="utf-8") as f:
-            json.dump(entry["param"], f, indent=2, default=_json_safe)
+            json.dump(_to_jsonable(entry["param"]), f, indent=2)
 
         row = {"probe": probe, "status": "OK", "ks_dir": str(entry["ks_dir"]), "save_path": str(entry["save_path"])}
         for _, count_row in counts.iterrows():
@@ -183,7 +221,10 @@ def main() -> None:
             if overrides:
                 print(f"Applying overrides for probe {probe}: {overrides}")
             param.update(overrides)
-
+            print("\n=== FINAL BombCell params (after overrides) ===")
+            for k in sorted(overrides.keys()):
+                print(f"{k}: {param.get(k)}")
+            print("=== END FINAL PARAMS ===\n")
             quality_metrics, param_out, unit_type, unit_type_string = bc.run_bombcell(str(ks_dir), str(save_path), param)
             roi_label = None
             # dict mapping probe name to max IN_ROI distance from tip (um)
