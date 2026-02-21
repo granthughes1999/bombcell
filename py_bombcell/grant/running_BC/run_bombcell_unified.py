@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import traceback
 from datetime import datetime
@@ -167,11 +168,22 @@ def export_results(results: Dict[str, Dict[str, Any]], output_root: Path, probes
 def dated_run_root(cfg: Dict[str, Any], mode: str) -> Path:
     mode_name = "batch" if mode == "batch" else "single_probe"
     base = cfg["recording_root"] / "bombcell"
-    date_tag = datetime.now().strftime("%Y%m%d")
-    run_root = base / f"bombcell_{mode_name}_{date_tag}"
-    if run_root.exists():
-        run_root = base / f"bombcell_{mode_name}_{date_tag}_{datetime.now().strftime('%H%M%S')}"
-    return run_root
+    now = datetime.now()
+    date_tag = now.strftime("%Y%m%d")
+    base.mkdir(parents=True, exist_ok=True)
+
+    for idx in range(0, 1000):
+        if idx == 0:
+            run_root = base / f"bombcell_{mode_name}_{date_tag}"
+        else:
+            run_root = base / f"bombcell_{mode_name}_{date_tag}_{now.strftime('%H%M%S')}_{os.getpid()}_{idx}"
+        try:
+            run_root.mkdir(parents=False, exist_ok=False)
+            return run_root
+        except FileExistsError:
+            continue
+
+    raise RuntimeError(f"Could not allocate unique run root under {base} after 1000 attempts")
 
 
 def parse_args() -> argparse.Namespace:
