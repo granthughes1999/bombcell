@@ -50,6 +50,7 @@ When running via the unified Grant runner and `probe_recording_roi` is set, Phy 
 ## 2) Shared recording config
 - Copy `grant/configs/grant_recording_config.example.json` to a per-recording config file.
 - Update recording paths once, then use the same config for both run and post-analysis notebooks.
+- For detailed config structure and override examples, see `grant/configs/GRANT_RECORDING_CONFIG_GUIDE.md`.
 
 ## 3) Probe-specific brain-region defaults
 The default config now includes persistent probe/region assignments:
