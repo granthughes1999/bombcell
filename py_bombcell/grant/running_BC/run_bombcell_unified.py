@@ -217,6 +217,7 @@ def main() -> None:
 
         try:
             param = bc.get_default_parameters(str(ks_dir), raw_file=str(raw_file), meta_file=str(meta_file), kilosort_version=4)
+            param['extractRaw'] = True
             overrides = get_probe_mode_overrides(cfg, probe, args.mode)
             if overrides:
                 print(f"Applying overrides for probe {probe}: {overrides}")

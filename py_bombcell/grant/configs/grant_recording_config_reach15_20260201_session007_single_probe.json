@@ -3,6 +3,8 @@
   "recordings_root": "H:/Grant/Neuropixels/Kilosort_Recordings",
   "open_ephys_continuous_subpath": "Record Node 103/experiment1/recording1/continuous",
   "structure_oebin_subpath": "Record Node 103/experiment1/recording1/structure.oebin",
+  "results_path": "/single_probe_results",
+  "run_dates": "20260218",
   "probe_stream_names": {
     "A": "Neuropix-PXI-100.ProbeA",
     "B": "Neuropix-PXI-100.ProbeB-AP",
@@ -41,14 +43,14 @@
         "maxRPVviolations": 0.3,
         "minPresenceRatio": 0.5,
         "presenceRatioBinSize": 120
-      }
+            }
     },
     "single_probe": {
       "all": {},
       "probes": {
         "A": {
-          "maxNPeaks": 4,
-          "maxNTroughs": 3,
+          "maxNPeaks": 5,
+          "maxNTroughs": 5,
           "maxWvBaselineFraction": 0.5,
           "maxRPVviolations": 0.3,
           "minPresenceRatio": 0.5,
@@ -60,14 +62,10 @@
           "minPresenceRatio": 0.6,
           "presenceRatioBinSize": 120,
           "tauR_valuesMin": 0.0005,
-          "tauR_valuesMax": 0.002,
-          "tauR_valuesStep": 0.0005,
-          "computeTimeChunks": true,
-          "deltaTimeChunk": 360
+          "tauR_valuesMax": 0.005,
+          "tauR_valuesStep": 0.0005
         },
         "C": {
-          "maxNPeaks": 4,
-          "maxNTroughs": 3,
           "maxWvBaselineFraction": 0.5,
           "maxRPVviolations": 0.3,
           "minPresenceRatio": 0.5,
@@ -75,8 +73,20 @@
           "nChannelsIsoDist": 6
         },
         "D": {
-          "maxNPeaks": 4,
-          "maxNTroughs": 3,
+          "maxWvBaselineFraction": 0.5,
+          "maxRPVviolations": 0.3,
+          "minPresenceRatio": 0.5,
+          "presenceRatioBinSize": 120,
+          "nChannelsIsoDist": 4
+        },
+        "E": {
+          "maxWvBaselineFraction": 0.5,
+          "maxRPVviolations": 0.3,
+          "minPresenceRatio": 0.5,
+          "presenceRatioBinSize": 120,
+          "nChannelsIsoDist": 4
+        },
+        "F": {
           "maxWvBaselineFraction": 0.5,
           "maxRPVviolations": 0.3,
           "minPresenceRatio": 0.5,

@@ -13,7 +13,11 @@
     "E": "Neuropix-PXI-100.ProbeE-AP",
     "F": "Neuropix-PXI-100.ProbeF-AP"
   },
-  "np20_probes": ["A", "C", "D"],
+  "np20_probes": [
+    "A",
+    "C",
+    "D"
+  ],
   "probe_brain_regions": {
     "A": "NP2.0 Simplex Lobule & Interposed Nucleus (SIM/IP)",
     "B": "NP1.0 Pontine Gray (PG)",
@@ -53,6 +57,11 @@
         "tauR_valuesStep": 0.0005,
         "computeTimeChunks": true,
         "deltaTimeChunk": 360
+      },
+      "modes": {
+        "single_probe": {
+          "maxRPVviolations": 0.2
+        }
       }
     }
   },

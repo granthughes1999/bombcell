@@ -59,11 +59,15 @@ def load_grant_config(config_path: str | Path | None = None) -> Dict[str, Any]:
 
     recording_name = raw.get("recording_name")
     recordings_root = raw.get("recordings_root")
+    results_path = raw.get("results_path")
+    run_dates = raw.get("run_dates")
     if not recording_name or not recordings_root:
         raise ValueError("Config must include non-empty 'recording_name' and 'recordings_root'.")
 
     recordings_root_path = _as_path(recordings_root)
     recording_root = recordings_root_path / recording_name
+
+    results_path = _as_path(results_path) if results_path else recording_root / "bombcell_results"
 
     stream_names = dict(DEFAULT_PROBE_STREAM_NAMES)
     stream_names.update(raw.get("probe_stream_names", {}))
@@ -91,6 +95,8 @@ def load_grant_config(config_path: str | Path | None = None) -> Dict[str, Any]:
     bombcell_default_root = recording_root / "bombcell" / "bombcell_DEFAULT"
     bombcell_np20_root = recording_root / "bombcell" / "bombcell_NP2.0"
     bombcell_singleprobe_root = recording_root / "bombcell" / "bombcell_single_probe"
+    bombcell_singleprobe_root_date = recording_root / "bombcell" / f"bombcell_single_probe_{run_dates}"
+
 
     cfg: Dict[str, Any] = {
         "config_path": config_path,
@@ -99,6 +105,7 @@ def load_grant_config(config_path: str | Path | None = None) -> Dict[str, Any]:
         "recording_root": recording_root,
         "continuous_root": continuous_root,
         "structure_oebin": structure_oebin,
+        "results_path": results_path,
         "probe_stream_names": stream_names,
         "probes_all": list(PROBE_LETTERS),
         "np20_probes": list(np20_probes),
@@ -110,6 +117,7 @@ def load_grant_config(config_path: str | Path | None = None) -> Dict[str, Any]:
         "bombcell_default_root": bombcell_default_root,
         "bombcell_np20_root": bombcell_np20_root,
         "bombcell_singleprobe_root": bombcell_singleprobe_root,
+        "bombcell_singleprobe_root_date": bombcell_singleprobe_root_date,
         "default_ks_staging_root": bombcell_default_root,
         "np20_ks_staging_root": bombcell_np20_root,
         "default_export_root": bombcell_default_root / "batch_DEFAULT_results",
@@ -132,7 +140,10 @@ def notebook_runtime_context(cfg: Dict[str, Any]) -> Dict[str, Any]:
         "BOMBCELL_SINGLEPROBE_ROOT": cfg["bombcell_singleprobe_root"],
         "DEFAULT_KS_STAGING_ROOT": cfg["default_ks_staging_root"],
         "NP20_KS_STAGING_ROOT": cfg["np20_ks_staging_root"],
+
         "BOMBCELL_KS_SINGLEPROBE_STAGING_ROOT": cfg["bombcell_singleprobe_root"],
+        "BOMBCELL_KS_SINGLEPROBE_STAGING_ROOT_DATE": cfg["bombcell_singleprobe_root_date"],
+
         "DEFAULT_EXPORT_ROOT": cfg["default_export_root"],
         "NP20_EXPORT_ROOT": cfg["np20_export_root"],
         "SINGLE_EXPORT_ROOT": cfg["single_export_root"],
@@ -144,6 +155,7 @@ def notebook_runtime_context(cfg: Dict[str, Any]) -> Dict[str, Any]:
         "CONTINUOUS_DAT_PATHS": cfg["continuous_dat_paths"],
         "KILOSORT_DIRS": cfg["probe_kilosort_dirs"],
         "STRUCTURE_OEBIN": cfg["structure_oebin"],
+        "RESULTS_PATH": cfg["results_path"],
     }
 
     for p in PROBE_LETTERS:

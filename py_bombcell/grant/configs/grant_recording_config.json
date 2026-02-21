@@ -3,6 +3,8 @@
   "recordings_root": "H:/Grant/Neuropixels/Kilosort_Recordings",
   "open_ephys_continuous_subpath": "Record Node 103/experiment1/recording1/continuous",
   "structure_oebin_subpath": "Record Node 103/experiment1/recording1/structure.oebin",
+  "results_path": "/bombcell/bombcell_single_probe/single_probe_results",
+  "run_dates": "20260218",
   "probe_stream_names": {
     "A": "Neuropix-PXI-100.ProbeA",
     "B": "Neuropix-PXI-100.ProbeB-AP",
