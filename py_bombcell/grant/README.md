@@ -21,8 +21,9 @@ This notebook shows how to:
 - label units by tip-distance ROI as `IN_ROI` / `OUTSIDE_ROI` (example: tip→950um on Probe B).
 
 Bombcell save path convention (current):
-- all run modes save directly to `.../kilosort4_<probe>/bombcell/`
-- no nested run subfolders (`DEFAULT`, `NP2_RERUN`, `SINGLE_PROBE`)
+- `batch` and `single_probe` runs stage outputs into dated folders under `.../bombcell/` (for example `bombcell_single_probe_20260218`).
+- Within each staged probe folder, Bombcell outputs and exported summaries are written to `.../kilosort4_<probe>/bombcell/`.
+- `np20_rerun` keeps its existing configured root/export paths.
 
 ROI labeling helper is available in:
 - `grant/analyzing_BC_results/post_analysis_setup.py` → `label_units_by_tip_distance(...)`

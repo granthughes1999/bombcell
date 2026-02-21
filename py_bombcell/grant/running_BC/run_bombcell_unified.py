@@ -4,6 +4,7 @@ import argparse
 import json
 import shutil
 import traceback
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
@@ -127,7 +128,7 @@ def export_results(results: Dict[str, Dict[str, Any]], output_root: Path, probes
 
     for probe in probes:
         entry = results.get(probe, {})
-        probe_out = output_root / f"Probe_{probe}"
+        probe_out = Path(entry.get("save_path", output_root / f"Probe_{probe}"))
         probe_out.mkdir(parents=True, exist_ok=True)
 
         if "quality_metrics" not in entry:
@@ -163,6 +164,16 @@ def export_results(results: Dict[str, Dict[str, Any]], output_root: Path, probes
     pd.DataFrame(rows).to_csv(output_root / "batch_summary.csv", index=False)
 
 
+def dated_run_root(cfg: Dict[str, Any], mode: str) -> Path:
+    mode_name = "batch" if mode == "batch" else "single_probe"
+    base = cfg["recording_root"] / "bombcell"
+    date_tag = datetime.now().strftime("%Y%m%d")
+    run_root = base / f"bombcell_{mode_name}_{date_tag}"
+    if run_root.exists():
+        run_root = base / f"bombcell_{mode_name}_{date_tag}_{datetime.now().strftime('%H%M%S')}"
+    return run_root
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Unified Bombcell runner for Grant workflows")
     parser.add_argument("--config", type=str, default=None, help="Path to grant_recording_config.json")
@@ -191,14 +202,14 @@ def main() -> None:
         probes = cfg["probes_all"]
 
     if args.mode == "batch":
-        staging_root = cfg["default_ks_staging_root"]
-        export_root = cfg["default_export_root"]
+        staging_root = dated_run_root(cfg, args.mode)
+        export_root = staging_root
     elif args.mode == "np20_rerun":
         staging_root = cfg["np20_ks_staging_root"]
         export_root = cfg["np20_export_root"]
     else:
-        staging_root = cfg["bombcell_singleprobe_root"]
-        export_root = cfg["single_export_root"]
+        staging_root = dated_run_root(cfg, args.mode)
+        export_root = staging_root
 
     staged_dirs = stage_kilosort4(cfg["probe_kilosort_dirs"], staging_root, probes, overwrite=args.overwrite)
 
