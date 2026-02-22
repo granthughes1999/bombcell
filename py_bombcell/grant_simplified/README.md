@@ -23,3 +23,7 @@ Each probe now exports `cluster_bc_classificationReason.tsv` directly during the
 - `run_bombcell/run_bombcell.py`
 - `config/recording_config*.json`
 - `analyzing_BC_results/post_analysis_setup.py`
+
+Notebook launcher:
+
+- `grant_simplified/run_bombcell/run_bombcell_launcher.ipynb` (edit mode/config in cells, then run to execute `run_bombcell.py`).
