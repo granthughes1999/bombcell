@@ -1,0 +1,28 @@
+{
+  "recording_name": "Reach15_20260201_session007_NP_Recording_Number02_2026-02-01_18-25-00",
+  "recordings_root": "H:/Grant/Neuropixels/Kilosort_Recordings",
+  "open_ephys_continuous_subpath": "Record Node 103/experiment1/recording1/continuous",
+  "structure_oebin_subpath": "Record Node 103/experiment1/recording1/structure.oebin",
+  "probes_all": ["A", "B", "C", "D", "E", "F"],
+  "probe_stream_names": {
+    "A": "Neuropix-PXI-100.ProbeA",
+    "B": "Neuropix-PXI-100.ProbeB-AP",
+    "C": "Neuropix-PXI-100.ProbeC",
+    "D": "Neuropix-PXI-100.ProbeD",
+    "E": "Neuropix-PXI-100.ProbeE-AP",
+    "F": "Neuropix-PXI-100.ProbeF-AP"
+  },
+  "probe_recording_roi": {
+    "A": 3450,
+    "B": 950,
+    "C": 1800,
+    "D": 1400,
+    "E": 800,
+    "F": 1120
+  },
+  "mode_param_overrides": {
+    "batch": {"all": {}},
+    "single_probe": {"all": {}}
+  },
+  "probe_param_overrides": {}
+}
