@@ -14,6 +14,8 @@ For notebook-based per-probe parameter edits and post-run reloads, use:
 
 - `grant/running_BC/BC_probe_param_and_reload.ipynb`
 
+`run_bombcell_unified.py` now always exports Bombcell Phy cluster-view TSVs (all metrics + `cluster_bc_unitType.tsv`) during the run, so a separate post-run Phy export notebook is not required.
+
 This notebook shows how to:
 - edit `probe_param_overrides` / `mode_param_overrides` directly in notebook cells,
 - resolve `ks_dir` and `save_path` for a specific mode/probe,

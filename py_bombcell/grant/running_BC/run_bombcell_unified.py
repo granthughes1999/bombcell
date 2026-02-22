@@ -66,6 +66,23 @@ def save_phy_roi_labels(ks_dir: Path, cluster_ids: np.ndarray, roi_labels: np.nd
     )
 
 
+def export_all_bc_results_to_phy(
+    quality_metrics: Dict[str, Any], unit_type_string: np.ndarray, param_out: Dict[str, Any], ks_dir: Path, save_path: Path
+) -> np.ndarray:
+    if "unique_templates" in param_out:
+        cluster_ids = np.asarray(param_out["unique_templates"])
+    elif "phy_clusterID" in quality_metrics:
+        cluster_ids = np.asarray(quality_metrics["phy_clusterID"])
+    else:
+        raise KeyError("Expected param_out['unique_templates'] or quality_metrics['phy_clusterID'] for Phy export.")
+
+    phy_param = dict(param_out)
+    phy_param["saveAsTSV"] = True
+    phy_param["unit_type_for_phy"] = True
+    bc.save_all_quality_metrics(quality_metrics, unit_type_string, cluster_ids, str(save_path), phy_param, str(ks_dir))
+    return cluster_ids
+
+
 def stage_kilosort4(source_dirs: Dict[str, Path], dst_root: Path, probes: Iterable[str], overwrite: bool) -> Dict[str, Path]:
     dst_root.mkdir(parents=True, exist_ok=True)
     staged: Dict[str, Path] = {}
@@ -185,6 +202,7 @@ def main() -> None:
             param.update(overrides)
 
             quality_metrics, param_out, unit_type, unit_type_string = bc.run_bombcell(str(ks_dir), str(save_path), param)
+            cluster_ids = export_all_bc_results_to_phy(quality_metrics, unit_type_string, param_out, ks_dir, save_path)
             roi_label = None
             # dict mapping probe name to max IN_ROI distance from tip (um)
             # current ROI labeling uses compute_roi_labels default tip_position='min_y'
@@ -192,17 +210,6 @@ def main() -> None:
             roi_end = roi_config.get(probe)
             if roi_end is not None:
                 roi_label = compute_roi_labels(quality_metrics, ks_dir, roi_end_um=float(roi_end))
-                # unique_templates is the canonical per-row unit ID order produced by Bombcell.
-                # phy_clusterID is used as a fallback when unique_templates is unavailable.
-                if "unique_templates" in param_out:
-                    cluster_ids = np.asarray(param_out["unique_templates"])
-                elif "phy_clusterID" in quality_metrics:
-                    cluster_ids = np.asarray(quality_metrics["phy_clusterID"])
-                else:
-                    raise KeyError(
-                        f"Could not determine cluster IDs for ROI label export for probe {probe}. "
-                        "Expected param_out['unique_templates'] or quality_metrics['phy_clusterID']."
-                    )
                 if len(cluster_ids) == len(roi_label):
                     save_phy_roi_labels(ks_dir, cluster_ids, roi_label)
                 else:
