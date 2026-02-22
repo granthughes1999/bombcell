@@ -25,6 +25,25 @@ BC_ROI_LABEL_COLUMN = "bc_roiLabel"
 #     if isinstance(obj, Path):
 #         return str(obj)
 #     return obj
+# NEW CODE: helper to print only modified params
+def _print_param_diff(default_param: Dict[str, Any], final_param: Dict[str, Any], header: str = "") -> None:
+    if header:
+        print(header)
+    changed = []
+    keys = set(default_param.keys()) | set(final_param.keys())
+    for k in sorted(keys):
+        dv = default_param.get(k, "<MISSING>")
+        fv = final_param.get(k, "<MISSING>")
+        if dv != fv:
+            changed.append((k, dv, fv))
+
+    if not changed:
+        print("No parameter changes vs defaults.")
+        return
+
+    print(f"Modified params vs defaults: {len(changed)}")
+    for k, dv, fv in changed:
+        print(f"  {k}: {dv} -> {fv}")
 
 # new code
 def _to_jsonable(obj: Any, _seen: set[int] | None = None) -> Any:
@@ -170,13 +189,16 @@ def dated_run_root(cfg: Dict[str, Any], mode: str) -> Path:
     base = cfg["recording_root"] / "bombcell"
     now = datetime.now()
     date_tag = now.strftime("%Y%m%d")
+    # minute tag
+    minute_tag = now.strftime("%H%M")
+    print(f"Creating run root for mode '{mode_name}' on {date_tag} at {minute_tag}...")
     base.mkdir(parents=True, exist_ok=True)
 
     for idx in range(0, 1000):
         if idx == 0:
-            run_root = base / f"bombcell_{mode_name}_{date_tag}"
+            run_root = base / f"bombcell_{mode_name}_{date_tag}_{minute_tag}"
         else:
-            run_root = base / f"bombcell_{mode_name}_{date_tag}_{now.strftime('%H%M%S')}_{os.getpid()}_{idx}"
+            run_root = base / f"bombcell_{mode_name}_{date_tag}_{minute_tag}_{now.strftime('%H%M%S')}_{os.getpid()}_{idx}"
         try:
             run_root.mkdir(parents=False, exist_ok=False)
             return run_root
@@ -204,10 +226,21 @@ def main() -> None:
     args = parse_args()
     cfg = load_grant_config(args.config)
 
+    # NEW CODE (correct placement)
     if args.mode == "single_probe":
         if not args.target_probe:
             raise ValueError("--target-probe is required in single_probe mode")
         probes = [args.target_probe.upper()]
+    elif args.mode == "np20_rerun":
+        probes = cfg["np20_probes"]
+    else:
+        probes = cfg["probes_all"]
+
+    # NEW CODE: print after probes is defined
+    if args.mode == "single_probe":
+        probe0 = probes[0]
+        print(f"\n[SINGLE_PROBE MODE] target_probe={probe0} region={cfg['probe_regions'].get(probe0, 'unknown region')}\n")
+
     elif args.mode == "np20_rerun":
         probes = cfg["np20_probes"]
     else:
@@ -239,17 +272,42 @@ def main() -> None:
         print(f"meta_file: {meta_file}")
 
         try:
-            param = bc.get_default_parameters(str(ks_dir), raw_file=str(raw_file), meta_file=str(meta_file), kilosort_version=4)
-            param['extractRaw'] = True
+
+            # param = bc.get_default_parameters(str(ks_dir), raw_file=str(raw_file), meta_file=str(meta_file), kilosort_version=4)
+            # param['extractRaw'] = True
+            # overrides = get_probe_mode_overrides(cfg, probe, args.mode)
+            # if overrides:
+            #     print(f"Applying overrides for probe {probe}: {overrides}")
+            # param.update(overrides)
+            # print("\n=== FINAL BombCell params (after overrides) ===")
+            # for k in sorted(overrides.keys()):
+            #     print(f"{k}: {param.get(k)}")
+            # print("=== END FINAL PARAMS ===\n")
+            # quality_metrics, param_out, unit_type, unit_type_string = bc.run_bombcell(str(ks_dir), str(save_path), param)
+
+            # NEW CODE
+            default_param = bc.get_default_parameters(
+                str(ks_dir),
+                raw_file=str(raw_file),
+                meta_file=str(meta_file),
+                kilosort_version=4,
+            )
+
+            param = dict(default_param)  # shallow copy is enough for diffing/updates here
+            param["extractRaw"] = True
+
             overrides = get_probe_mode_overrides(cfg, probe, args.mode)
             if overrides:
                 print(f"Applying overrides for probe {probe}: {overrides}")
             param.update(overrides)
-            print("\n=== FINAL BombCell params (after overrides) ===")
-            for k in sorted(overrides.keys()):
-                print(f"{k}: {param.get(k)}")
-            print("=== END FINAL PARAMS ===\n")
-            quality_metrics, param_out, unit_type, unit_type_string = bc.run_bombcell(str(ks_dir), str(save_path), param)
+
+            _print_param_diff(default_param, param, header="\n=== BombCell param changes (defaults -> final) ===")
+            print("=== END PARAM CHANGES ===\n")
+
+            # quality_metrics, param_out, unit_type, unit_type_string = bc.run_bombcell(str(ks_dir), str(save_path), param)
+            out = bc.run_bombcell(str(ks_dir), str(save_path), param)
+            quality_metrics, param_out, unit_type, unit_type_string = out[:4]
+
             roi_label = None
             # dict mapping probe name to max IN_ROI distance from tip (um)
             # current ROI labeling uses compute_roi_labels default tip_position='min_y'

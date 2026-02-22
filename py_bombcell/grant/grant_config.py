@@ -92,7 +92,7 @@ def load_grant_config(config_path: str | Path | None = None) -> Dict[str, Any]:
     continuous_dat_paths = {probe: probe_dirs[probe] / "continuous.dat" for probe in PROBE_LETTERS}
     probe_kilosort_dirs = {probe: probe_dirs[probe] / "kilosort4" for probe in PROBE_LETTERS}
 
-    bombcell_default_root = recording_root / "bombcell" / "bombcell_DEFAULT"
+    bombcell_default_root = recording_root / "bombcell" / "bombcell_batch"
     bombcell_np20_root = recording_root / "bombcell" / "bombcell_NP2.0"
     bombcell_singleprobe_root = recording_root / "bombcell" / "bombcell_single_probe"
     bombcell_singleprobe_root_date = recording_root / "bombcell" / f"bombcell_single_probe_{run_dates}"

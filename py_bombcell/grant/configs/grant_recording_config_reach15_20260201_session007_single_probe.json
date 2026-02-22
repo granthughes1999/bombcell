@@ -43,14 +43,14 @@
         "maxRPVviolations": 0.3,
         "minPresenceRatio": 0.5,
         "presenceRatioBinSize": 120
-            }
+      }
     },
     "single_probe": {
       "all": {},
       "probes": {
         "A": {
-          "maxNPeaks": 5,
-          "maxNTroughs": 5,
+          "maxNPeaks": 4,
+          "maxNTroughs": 4,
           "maxWvBaselineFraction": 0.5,
           "maxRPVviolations": 0.3,
           "minPresenceRatio": 0.5,
@@ -99,7 +99,7 @@
   "probe_param_overrides": {
     "A": {
       "all_modes": {
-        "maxNPeaks": 4,
+        "maxNPeaks": 3,
         "maxNTroughs": 3,
         "maxWvBaselineFraction": 0.5,
         "maxRPVviolations": 0.3,
@@ -110,14 +110,16 @@
       "modes": {
         "single_probe": {
           "maxNPeaks": 4,
-          "maxNTroughs": 3,
+          "maxNTroughs": 4,
           "maxWvBaselineFraction": 0.5,
           "maxRPVviolations": 0.3,
           "minPresenceRatio": 0.5,
           "presenceRatioBinSize": 120,
           "nChannelsIsoDist": 8
         }
-      }
+      },
+      "maxNPeaks": 5,
+      "maxNTroughs": 5
     },
     "B": {
       "all_modes": {
