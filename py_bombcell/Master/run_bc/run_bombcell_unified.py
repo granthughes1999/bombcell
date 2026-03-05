@@ -87,7 +87,7 @@ def compute_roi_labels(
     quality_metrics: Dict[str, Any],
     ks_dir: Path,
     roi_end_um: float,
-    tip_position: str = "min_y",
+    tip_position: str = "min_y", # min_y is verifed as the correct defauly. max_y will invert the tip direction and should only be used if probe orientation metadata indicates it's needed.
     in_label: str = "IN_ROI",
     out_label: str = "OUT_ROI",
 ) -> np.ndarray:
@@ -295,7 +295,7 @@ def main() -> None:
             )
 
             param = dict(default_param)  # shallow copy is enough for diffing/updates here
-            param["extractRaw"] = True
+            param["extractRaw"] = False
             # Memory-safe default: allow config overrides to increase this if desired.
             param.setdefault("extractRawNJobs", 1)
 

@@ -393,6 +393,27 @@ def unpack_dicts(
     )
 
 
+def _coerce_extract_raw_n_jobs(value):
+    """
+    Parse extractRawNJobs from params into a safe integer.
+
+    Returns
+    -------
+    int
+        Job count to use for waveform extraction. `1` disables joblib
+        multiprocessing and runs serially in-process.
+    """
+    try:
+        n_jobs = int(value)
+    except (TypeError, ValueError):
+        n_jobs = -1
+
+    # joblib treats 0 as invalid; fall back to serial mode.
+    if n_jobs == 0:
+        return 1
+    return n_jobs
+
+
 def extract_raw_waveforms(
     param, spike_clusters, spike_times, re_extract_waveforms, save_path, template_peak_channels=None
 ):
@@ -449,6 +470,7 @@ def extract_raw_waveforms(
     detrendWaveform = param["detrendWaveform"]  # For BombCell average waveforms
     detrendForUnitMatch = param.get("detrendForUnitMatch", False)  # For UnitMatch raw waveforms
     save_multiple_raw = param.get("saveMultipleRaw", False)  # get and save data for UnitMatch
+    extract_raw_n_jobs = _coerce_extract_raw_n_jobs(param.get("extractRawNJobs", -1))
     waveform_baseline_noise = param.get("waveformBaselineNoiseWindow", 20)
     spike_width = param["spike_width"]
     
@@ -571,25 +593,52 @@ def extract_raw_waveforms(
                 all_spikes_idxs[i, : len(clus_spike_times[i])] = clus_spike_times[i]
                 all_spikes_idxs[i, len(clus_spike_times[i]) :] = np.nan
 
-        all_waveforms = Parallel(n_jobs=-1, verbose=10, mmap_mode="r", max_nbytes=None)(
-            delayed(process_a_unit)(
-                raw_data,
-                spike_width,
-                half_width,
-                all_spikes_idxs[i],
-                n_channels_rec,
-                n_channels,
-                n_sync_channels,
-                cid,
-                detrendWaveform,
-                detrendForUnitMatch,
-                waveform_baseline_noise,
-                raw_waveforms_dir,
-                save_multiple_raw,
-                template_peak_channels[i] if template_peak_channels is not None and i < len(template_peak_channels) else None,
+        if extract_raw_n_jobs == 1:
+            # Serial path avoids joblib process spawning/memmap pressure on memory-constrained systems.
+            all_waveforms = [
+                process_a_unit(
+                    raw_data,
+                    spike_width,
+                    half_width,
+                    all_spikes_idxs[i],
+                    n_channels_rec,
+                    n_channels,
+                    n_sync_channels,
+                    cid,
+                    detrendWaveform,
+                    detrendForUnitMatch,
+                    waveform_baseline_noise,
+                    raw_waveforms_dir,
+                    save_multiple_raw,
+                    template_peak_channels[i] if template_peak_channels is not None and i < len(template_peak_channels) else None,
+                )
+                for i, cid in tqdm(enumerate(unique_clusters))
+            ]
+        else:
+            all_waveforms = Parallel(
+                n_jobs=extract_raw_n_jobs,
+                verbose=10,
+                mmap_mode="r",
+                max_nbytes=None,
+            )(
+                delayed(process_a_unit)(
+                    raw_data,
+                    spike_width,
+                    half_width,
+                    all_spikes_idxs[i],
+                    n_channels_rec,
+                    n_channels,
+                    n_sync_channels,
+                    cid,
+                    detrendWaveform,
+                    detrendForUnitMatch,
+                    waveform_baseline_noise,
+                    raw_waveforms_dir,
+                    save_multiple_raw,
+                    template_peak_channels[i] if template_peak_channels is not None and i < len(template_peak_channels) else None,
+                )
+                for i, cid in tqdm(enumerate(unique_clusters))
             )
-            for i, cid in tqdm(enumerate(unique_clusters))
-        )
 
         (raw_waveforms,
          raw_waveforms_full,
