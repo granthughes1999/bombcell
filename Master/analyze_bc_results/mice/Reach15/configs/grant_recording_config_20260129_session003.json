@@ -1,0 +1,22 @@
+{
+  "recording_name": "Reach15_20260129_session003_NP_Recording_2026-01-29_14-30-01",
+  "recordings_root": "H:/Grant/Neuropixels/Kilosort_Recordings",
+  "open_ephys_continuous_subpath": "Record Node 103/experiment1/recording1/continuous",
+  "structure_oebin_subpath": "Record Node 103/experiment1/recording1/structure.oebin",
+  "np20_probes": [
+    "A",
+    "C",
+    "D"
+  ],
+  "run_dates": "20260305",
+  "generated_from_env": {
+    "generated_at": "2026-03-05T17:14:56",
+    "session_selection": 1,
+    "mouse": "Reach15",
+    "behavioral_folder": "grant_reach15_swingDoor-christie",
+    "date": "20260129",
+    "session": "session003",
+    "nwb_file": "NA",
+    "bombcell_folder": "bombcell_batch_20260305_1130"
+  }
+}

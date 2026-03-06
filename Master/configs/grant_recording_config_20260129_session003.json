@@ -1,0 +1,74 @@
+{
+  "recording_name": "Reach15_20260129_session003_NP_Recording_2026-01-29_14-30-01",
+  "recordings_root": "H:/Grant/Neuropixels/Kilosort_Recordings",
+  "open_ephys_continuous_subpath": "Record Node 103/experiment1/recording1/continuous",
+  "structure_oebin_subpath": "Record Node 103/experiment1/recording1/structure.oebin",
+  "results_path": "/bombcell/bombcell_single_probe/single_probe_results",
+  "run_dates": "20260305",
+  "probe_stream_names": {
+    "A": "Neuropix-PXI-100.ProbeA",
+    "B": "Neuropix-PXI-100.ProbeB-AP",
+    "C": "Neuropix-PXI-100.ProbeC",
+    "D": "Neuropix-PXI-100.ProbeD",
+    "E": "Neuropix-PXI-100.ProbeE-AP",
+    "F": "Neuropix-PXI-100.ProbeF-AP"
+  },
+  "np20_probes": [
+    "A",
+    "C",
+    "D"
+  ],
+  "probe_brain_regions": {
+    "A": "NP2.0 Simplex Lobule & Interposed Nucleus (SIM/IP)",
+    "B": "NP1.0 Pontine Gray (PG)",
+    "C": "NP2.0 Motor Cortex (MoP)",
+    "D": "NP2.0 The Ventral Anterior-Lateral complex (VA/VL) of the thalamus ",
+    "E": "NP1.0 Substantia Nigra Pars Reticulata (SnR)",
+    "F": "NP1.0 Red Nucleus (RN)"
+  },
+  "probe_recording_roi": {
+    "A": 3450,
+    "B": 950,
+    "C": 1800,
+    "D": 1400,
+    "E": 800,
+    "F": 1120
+  },
+  "mode_param_overrides": {
+    "np20_rerun": {
+      "all": {
+        "maxNPeaks": 4,
+        "maxNTroughs": 3,
+        "maxWvBaselineFraction": 0.5,
+        "maxRPVviolations": 0.3,
+        "minPresenceRatio": 0.5,
+        "presenceRatioBinSize": 120
+      }
+    }
+  },
+  "probe_param_overrides": {
+    "B": {
+      "all_modes": {
+        "maxRPVviolations": 0.2,
+        "minPresenceRatio": 0.6,
+        "presenceRatioBinSize": 120,
+        "tauR_valuesMin": 0.0005,
+        "tauR_valuesMax": 0.002,
+        "tauR_valuesStep": 0.0005,
+        "computeTimeChunks": true,
+        "deltaTimeChunk": 360
+      }
+    }
+  },
+  "custom_channel_map_notes": "If your 4-shank NP2.0 channel map is non-default, update probe_stream_names and set per-probe nChannels / nSyncChannels overrides if needed. Use structure.oebin from the same recording so Bombcell reads the matching metadata.",
+  "generated_from_env": {
+    "generated_at": "2026-03-05T16:54:40",
+    "session_selection": 1,
+    "mouse": "Reach15",
+    "behavioral_folder": "grant_reach15_swingDoor-christie",
+    "date": "20260129",
+    "session": "session003",
+    "nwb_file": "NA",
+    "bombcell_folder": "bombcell_batch_20260305_1130"
+  }
+}
