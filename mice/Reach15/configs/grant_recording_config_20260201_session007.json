@@ -1,5 +1,5 @@
 {
-  "recording_name": "Reach15_20260129_session003_NP_Recording_2026-01-29_14-30-01",
+  "recording_name": "Reach15_20260201_session007_NP_Recording_Number02_2026-02-01_18-25-00",
   "recordings_root": "H:/Grant/Neuropixels/Kilosort_Recordings",
   "open_ephys_continuous_subpath": "Record Node 103/experiment1/recording1/continuous",
   "structure_oebin_subpath": "Record Node 103/experiment1/recording1/structure.oebin",
@@ -62,13 +62,13 @@
   },
   "custom_channel_map_notes": "If your 4-shank NP2.0 channel map is non-default, update probe_stream_names and set per-probe nChannels / nSyncChannels overrides if needed. Use structure.oebin from the same recording so Bombcell reads the matching metadata.",
   "generated_from_env": {
-    "generated_at": "2026-03-09T18:47:37",
-    "session_selection": 1,
+    "generated_at": "2026-03-09T19:18:07",
+    "session_selection": 3,
     "mouse": "Reach15",
     "behavioral_folder": "grant_reach15_swingDoor-christie",
-    "date": "20260129",
-    "session": "session003",
-    "nwb_file": "NA",
-    "bombcell_folder": "bombcell_batch_20260305_1130"
+    "date": "20260201",
+    "session": "session007",
+    "nwb_file": "Reach15_20260201_session007_NP_Recording_Number02_2026-02-01_18-25-00",
+    "bombcell_folder": "bombcell_batch_20260304_1536"
   }
 }
