@@ -7,9 +7,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from mice.Reach15.helper_func.nwb_data_prep import _session_suffix
 import numpy as np
 import pandas as pd
-import os
 
 try:
     from pynwb import NWBHDF5IO
@@ -50,7 +50,7 @@ class NWBLoader:
                 self.io.close()
         except Exception:
             pass
-
+        
 
 def resolve_nwb_path(p: str | Path) -> Path:
     p = Path(p)
@@ -283,7 +283,9 @@ def load_or_build_processed_bundle(
             _cols0 = set(_md[_probe0].columns)
 
             _has_bombcell_cols = ("in_brainRegion" in _cols0) and ("brain_region" in _cols0)
-            if (not _has_bombcell_cols) and use_bombcell_if_available and bombcell_root_str != "":
+            _has_bombcell_cols_2 = ("Brain_Region_x" in _cols0) and ("bc_ROI_x" in _cols0)
+            _has_any_bombcell_cols = _has_bombcell_cols or _has_bombcell_cols_2
+            if (not _has_any_bombcell_cols) and use_bombcell_if_available and bombcell_root_str != "":
                 if verbose:
                     print("Existing bundle missing Bombcell columns. Rebuild requested.")
                 rebuild_required = True
@@ -405,6 +407,61 @@ def load_bombcell_metrics(
     cluster_dic: dict[str, pd.DataFrame] = {}
     report: dict[str, list[str]] = {"loaded_qm": [], "loaded_cluster": [], "missing": []}
 
+    def _read_table(path: Path, *, sep: str | None = None) -> pd.DataFrame | None:
+        if not path.exists():
+            return None
+        if sep is None:
+            sep = "\t" if path.suffix.lower() == ".tsv" else ","
+        df = pd.read_csv(path, sep=sep)
+        df.columns = [str(c).strip() for c in df.columns]
+        return df
+
+    def _looks_like_cluster_table(df: pd.DataFrame) -> bool:
+        if df is None or df.empty:
+            return False
+        cols = set(df.columns)
+        if "cluster_id" not in cols:
+            return False
+        expected = {"bc_classificationReason", "bc_unitType", "bc_ROI", "Brain_Region", "KSLabel"}
+        return len(cols.intersection(expected)) > 0
+
+    def _build_cluster_table_from_parts(pdir: Path) -> pd.DataFrame | None:
+        pieces: list[pd.DataFrame] = []
+        part_specs = [
+            ("cluster_bc_classificationReason.tsv", "bc_classificationReason"),
+            ("cluster_bc_classificationreason.tsv", "bc_classificationReason"),
+            ("cluster_bc_classification_reason.tsv", "bc_classificationReason"),
+            ("cluster_bc_classificationReason.csv", "bc_classificationReason"),
+            ("cluster_bc_unitType.tsv", "bc_unitType"),
+            ("cluster_bc_ROI.tsv", "bc_ROI"),
+            ("cluster_Brain_Region.tsv", "Brain_Region"),
+            ("cluster_KSLabel.tsv", "KSLabel"),
+        ]
+
+        for filename, value_col in part_specs:
+            df = _read_table(pdir / filename)
+            if df is None or "cluster_id" not in df.columns or value_col not in df.columns:
+                continue
+            piece = df.loc[:, ["cluster_id", value_col]].copy()
+            piece["cluster_id"] = pd.to_numeric(piece["cluster_id"], errors="coerce")
+            piece = piece.dropna(subset=["cluster_id"]).drop_duplicates(subset=["cluster_id"], keep="first")
+            if piece.empty:
+                continue
+            piece["cluster_id"] = piece["cluster_id"].astype(int)
+            pieces.append(piece)
+
+        if len(pieces) == 0:
+            return None
+
+        out = pieces[0]
+        for piece in pieces[1:]:
+            out = out.merge(piece, on="cluster_id", how="outer")
+
+        out = out.sort_values("cluster_id").reset_index(drop=True)
+        if "bc_classificationReason" not in out.columns and "bc_unitType" in out.columns:
+            out["bc_classificationReason"] = out["bc_unitType"]
+        return out
+
     # Pre-index potential probe dirs once
     ks_probe_dirs = [d for d in root.rglob("*") if d.is_dir() and d.name.lower().startswith("kilosort4_")]
     dir_map = {}
@@ -439,8 +496,16 @@ def load_bombcell_metrics(
             pdir / "cluster_bc_classification_reason.tsv",
         ]
         cpath = next((x for x in cluster_candidates if x.exists()), None)
+        cl = None
         if cpath is not None:
-            cl = pd.read_csv(cpath, sep="\t")
+            cl = _read_table(cpath)
+            if not _looks_like_cluster_table(cl):
+                cl = None
+
+        if cl is None:
+            cl = _build_cluster_table_from_parts(pdir)
+
+        if cl is not None and _looks_like_cluster_table(cl):
             cluster_dic[probe] = cl
             report["loaded_cluster"].append(probe)
         else:
@@ -1057,6 +1122,106 @@ def map_source_events_to_pca_trials(
     return mapped, report
 
 
+def relabel_df_stim_block_labels(
+    df_stim: pd.DataFrame,
+    pca_event_meta: pd.DataFrame,
+    *,
+    time_col: str = "start_time",
+    block_label_col: str = "block_label",
+    prefer_real: bool = True,
+    preserve_original: bool = True,
+) -> pd.DataFrame:
+    """
+    Reassign df_stim block labels from trial-level PCA metadata.
+
+    The raw NWB trials/event table can contain block labels that drift when a
+    dense event stream (for example frame events) is treated row-by-row. This
+    helper maps each event time onto the nearest trial start in pca_event_meta
+    and overwrites block_label using real_condition_epoch when available.
+    """
+    if time_col not in df_stim.columns:
+        raise ValueError(f"df_stim must contain {time_col!r}.")
+    if "start_time" not in pca_event_meta.columns:
+        raise ValueError("pca_event_meta must contain 'start_time'.")
+
+    meta = pca_event_meta.copy()
+    meta["start_time"] = pd.to_numeric(meta["start_time"], errors="coerce")
+    meta = meta.dropna(subset=["start_time"]).sort_values("start_time", kind="mergesort").reset_index(drop=True)
+    if meta.empty:
+        raise ValueError("pca_event_meta has no valid trial start_time values.")
+
+    label_source_col = None
+    if bool(prefer_real) and "real_condition_epoch" in meta.columns and meta["real_condition_epoch"].notna().any():
+        label_source_col = "real_condition_epoch"
+    elif "condition_epoch" in meta.columns and meta["condition_epoch"].notna().any():
+        label_source_col = "condition_epoch"
+    else:
+        raise ValueError("pca_event_meta must contain condition_epoch or real_condition_epoch.")
+
+    out = df_stim.copy().reset_index(drop=True)
+    if bool(preserve_original) and block_label_col in out.columns and f"{block_label_col}_raw" not in out.columns:
+        out[f"{block_label_col}_raw"] = out[block_label_col]
+
+    event_time = pd.to_numeric(out[time_col], errors="coerce").to_numpy(dtype=float)
+    out["block_label_align_abs_delta_s"] = np.nan
+    out["block_label_align_method"] = pd.Series(pd.NA, index=out.index, dtype="object")
+    out["block_label_source"] = pd.Series(pd.NA, index=out.index, dtype="object")
+    out["pca_trial_start_time"] = np.nan
+    out["pca_trial_index0"] = pd.Series(pd.array([pd.NA] * len(out), dtype="Int64"))
+
+    valid = np.isfinite(event_time)
+    if not bool(valid.any()):
+        return out
+
+    trial_start = meta["start_time"].to_numpy(dtype=float)
+    x = event_time[valid]
+    right = np.searchsorted(trial_start, x, side="left")
+    left = np.clip(right - 1, 0, len(trial_start) - 1)
+    right = np.clip(right, 0, len(trial_start) - 1)
+
+    left_val = trial_start[left]
+    right_val = trial_start[right]
+    choose_right = np.abs(x - right_val) <= np.abs(x - left_val)
+    match = np.where(choose_right, right, left)
+
+    row_idx = np.flatnonzero(valid)
+    out.loc[row_idx, "pca_trial_start_time"] = trial_start[match]
+    out.loc[row_idx, "block_label_align_abs_delta_s"] = np.abs(x - trial_start[match])
+    out.loc[row_idx, "block_label_align_method"] = "nearest_trial_start"
+    out.loc[row_idx, "block_label_source"] = label_source_col
+
+    if "trial_index0" in meta.columns:
+        meta_trial_index = pd.to_numeric(meta["trial_index0"], errors="coerce").to_numpy(dtype=float)
+        mapped_trial_index = np.full(len(out), np.nan, dtype=float)
+        mapped_trial_index[row_idx] = meta_trial_index[match]
+        out["pca_trial_index0"] = pd.Series(pd.array(mapped_trial_index, dtype="Int64"))
+
+    numeric_cols = [col for col in ("epoch_id", "real_epoch_id") if col in meta.columns]
+    object_cols = [
+        col
+        for col in ("condition", "condition_epoch", "real_condition", "real_condition_epoch")
+        if col in meta.columns
+    ]
+
+    for col in numeric_cols:
+        mapped_numeric = np.full(len(out), np.nan, dtype=float)
+        meta_numeric = pd.to_numeric(meta[col], errors="coerce").to_numpy(dtype=float)
+        mapped_numeric[row_idx] = meta_numeric[match]
+        out[col] = pd.Series(pd.array(mapped_numeric, dtype="Int64"))
+
+    for col in object_cols:
+        mapped_object = np.full(len(out), pd.NA, dtype=object)
+        meta_object = meta[col].astype(object).to_numpy()
+        mapped_object[row_idx] = meta_object[match]
+        out[col] = mapped_object
+
+    mapped_block_label = np.full(len(out), pd.NA, dtype=object)
+    meta_label = meta[label_source_col].astype(object).to_numpy()
+    mapped_block_label[row_idx] = meta_label[match]
+    out[block_label_col] = mapped_block_label
+    return out
+
+
 def apply_runner_post_alignment(
     em_aligned: pd.DataFrame,
     align_to: str,
@@ -1467,6 +1632,20 @@ def merge_units_with_metrics(
         out["cluster_id"] = np.arange(len(out), dtype=int)
         return out
 
+    def _attach_cluster_id_or_raise(df: pd.DataFrame, cluster_ids: pd.Series, *, probe: str, source_name: str) -> pd.DataFrame:
+        out = df.copy().reset_index(drop=True)
+        if "cluster_id" in out.columns:
+            out["cluster_id"] = pd.to_numeric(out["cluster_id"], errors="coerce")
+            return out
+        if len(out) != len(cluster_ids):
+            raise ValueError(
+                f"{source_name} table for probe {probe} is missing cluster_id and has {len(out)} rows, "
+                f"but the NWB units table has {len(cluster_ids)} rows. "
+                f"Check the Bombcell file contents for this probe."
+            )
+        out["cluster_id"] = cluster_ids.values
+        return out
+
     merged_dic: dict[str, pd.DataFrame] = {}
     for probe, u0 in df_units_dic.items():
         u = u0.copy().reset_index(drop=True)
@@ -1478,9 +1657,7 @@ def merge_units_with_metrics(
         m = _ensure_cluster_id(u)
 
         if qm_dic is not None and probe in qm_dic:
-            qm = qm_dic[probe].copy().reset_index(drop=True)
-            if "cluster_id" not in qm.columns and "cluster_id" in m.columns:
-                qm["cluster_id"] = m["cluster_id"].values
+            qm = _attach_cluster_id_or_raise(qm_dic[probe], m["cluster_id"], probe=str(probe), source_name="Bombcell qMetrics")
             if "cluster_id" in qm.columns:
                 qm["cluster_id"] = pd.to_numeric(qm["cluster_id"], errors="coerce")
                 keep_qm = [c for c in ["cluster_id", "nSpikes", "maxDriftEstimate", "maxChannels"] if c in qm.columns]
@@ -1488,9 +1665,7 @@ def merge_units_with_metrics(
                     m = m.merge(qm[keep_qm], on="cluster_id", how="left")
 
         if cluster_dic is not None and probe in cluster_dic:
-            cl = cluster_dic[probe].copy().reset_index(drop=True)
-            if "cluster_id" not in cl.columns and "cluster_id" in m.columns:
-                cl["cluster_id"] = m["cluster_id"].values
+            cl = _attach_cluster_id_or_raise(cluster_dic[probe], m["cluster_id"], probe=str(probe), source_name="Bombcell cluster")
             if "cluster_id" in cl.columns:
                 cl["cluster_id"] = pd.to_numeric(cl["cluster_id"], errors="coerce")
                 keep_cl = [c for c in ["cluster_id", "bc_classificationReason", "bc_ROI", "Brain_Region"] if c in cl.columns]
@@ -1899,561 +2074,3 @@ def build_and_save_processed_bundle(
         pca_event_meta=pca_event_meta,
         extras=extras,
     )
-
-from dotenv import load_dotenv
-
-DEFAULT_RECORDINGS_ROOT = "H:/Grant/Neuropixels/Kilosort_Recordings"
-DEFAULT_OPEN_EPHYS_CONTINUOUS_SUBPATH = "Record Node 103/experiment1/recording1/continuous"
-DEFAULT_STRUCTURE_OEBIN_SUBPATH = "Record Node 103/experiment1/recording1/structure.oebin"
-DEFAULT_NP20_PROBES = "A,C,D"
-SESSION_SUFFIX_BY_INDEX = {1: "", 2: "_01", 3: "_02"}
-
-
-def _normalize_env_value(value: str | None, *, default: str | None = None) -> str | None:
-    if value is None:
-        return default
-    stripped = value.strip()
-    if stripped == "":
-        return default
-    if stripped.startswith('"') and stripped.endswith('"') and len(stripped) >= 2:
-        return stripped[1:-1]
-    return stripped
-
-
-def _require_env(key: str) -> str:
-    value = _normalize_env_value(os.getenv(key))
-    if value is None:
-        raise ValueError(f"{key} environment variable is not set. Please set it in .env.")
-    return value
-
-
-def _optional_env(key: str, default: str | None = None) -> str | None:
-    return _normalize_env_value(os.getenv(key), default=default)
-
-
-def _session_suffix(session_selection: int) -> str:
-    if session_selection not in SESSION_SUFFIX_BY_INDEX:
-        raise ValueError("session_selection must be 1, 2, or 3.")
-    return SESSION_SUFFIX_BY_INDEX[session_selection]
-
-
-def _session_tag(date_value: str, session_value: str, session_selection: int) -> str:
-    def _clean(text: str) -> str:
-        return re.sub(r"[^A-Za-z0-9._-]+", "_", text).strip("_")
-
-    tokens = [_clean(date_value), _clean(session_value)]
-    out = "_".join([t for t in tokens if t])
-    return out or f"session_{session_selection}"
-
-
-def _resolve_mouse_root(mouse: str, mouse_root: str | Path | None = None) -> Path:
-    if mouse_root is not None:
-        return Path(mouse_root).resolve()
-
-    cwd = Path.cwd().resolve()
-    script_dir = Path(__file__).resolve().parent
-    candidates = [
-        cwd,
-        cwd.parent if cwd.name.lower() == "run_bc" else None,
-        script_dir,
-        script_dir.parent if script_dir.name.lower() == "run_bc" else None,
-        cwd / "mice" / mouse,
-        cwd.parent / "mice" / mouse,
-    ]
-
-    for candidate in candidates:
-        if candidate is None:
-            continue
-        if (candidate / "configs").exists():
-            return candidate
-
-    return cwd / "mice" / mouse
-
-
-def _load_config_template(config_dir: Path) -> dict[str, Any]:
-    for name in ("grant_recording_config.example.json", "grant_recording_config.json"):
-        path = config_dir / name
-        if path.exists():
-            with path.open("r", encoding="utf-8") as f:
-                return json.load(f)
-
-    return {
-        "recording_name": "",
-        "recordings_root": DEFAULT_RECORDINGS_ROOT,
-        "open_ephys_continuous_subpath": DEFAULT_OPEN_EPHYS_CONTINUOUS_SUBPATH,
-        "structure_oebin_subpath": DEFAULT_STRUCTURE_OEBIN_SUBPATH,
-        "np20_probes": [x.strip() for x in DEFAULT_NP20_PROBES.split(",") if x.strip()],
-    }
-
-
-def _parse_probe_csv(raw: str | None, fallback: list[str] | None = None) -> list[str]:
-    if raw is None:
-        return list(fallback or [])
-    probes = [p.strip().upper() for p in str(raw).split(",") if p.strip()]
-    return probes if probes else list(fallback or [])
-
-
-from dotenv import load_dotenv
-def load_env():
-    load_dotenv()
-
-    # SET 1: General Information
-    MOUSE = os.getenv('MOUSE')
-    if MOUSE is None:
-        raise ValueError("MOUSE_NAME environment variable is not set. Please set it to the name of the mouse.")
-    else:
-        print(f"MOUSE loaded: {MOUSE}")
-        print('\n')
-    print('\n')
-    print('-- Behavioral Files --')
-    BEHAVIORAL_FOLDER = os.getenv('BEHAVIORAL_FOLDER')
-    if BEHAVIORAL_FOLDER is None:
-        raise ValueError("BEHAVIORAL_FOLDER environment variable is not set. Please set it to the path of the behavioral recordings.")
-    else:
-        print(f"BEHAVIORAL_FOLDER loaded: {BEHAVIORAL_FOLDER}")
-
-    # SET 2: Neuropixels File 1 Information
-    print('-- First Neuropixels File --')
-    NP_FILE = os.getenv('NP_FILE')
-    if NP_FILE is None:
-        raise ValueError("NP_FILE environment variable is not set. Please set it to the path of the neuropixels file.")
-    else:
-        print(f"NP_FILE loaded: {NP_FILE}")
-    NWB_FILE = os.getenv('NWB_FILE')
-    if NWB_FILE is None:
-        raise ValueError("NWB_FILE environment variable is not set. Please set it to the path of the NWB file.")
-    else:
-        print(f"NWB_FILE loaded: {NWB_FILE}")
-    DATE = os.getenv('DATE')
-    if DATE is None:
-        raise ValueError("DATE environment variable is not set. Please set it to the date of the recording.")
-    else:
-        print(f"DATE loaded: {DATE}")
-    SESSION = os.getenv('SESSION')
-    if SESSION is None:
-        raise ValueError("SESSION environment variable is not set. Please set it to the session number.")
-    else:
-        print(f"SESSION loaded: {SESSION}")
-    BOMBCELL = os.getenv('BOMBCELL')
-    if BOMBCELL is None:
-        raise ValueError("BOMBCELL environment variable is not set. Please set it to the label of the bombcell cluster (e.g. 'putative_bombcell').")
-    else:
-        print(f"BOMBCELL loaded: {BOMBCELL}")
-    PROBE_A_CH_CONFIG = os.getenv('PROBE_A_CH_CONFIG')
-    if PROBE_A_CH_CONFIG is None:
-        raise ValueError("PROBE_A_CH_CONFIG environment variable is not set. Please set it to the path of the probe A channel configuration file (e.g. 'probe_a_channels.csv').")
-    else:
-        print(f"PROBE_A_CH_CONFIG loaded: {PROBE_A_CH_CONFIG}")
-    PROBE_C_CH_CONFIG = os.getenv('PROBE_C_CH_CONFIG')
-    if PROBE_C_CH_CONFIG is None:
-        raise ValueError("PROBE_C_CH_CONFIG environment variable is not set. Please set it to the path of the probe C channel configuration file (e.g. 'probe_c_channels.csv').")
-    else:
-        print(f"PROBE_C_CH_CONFIG loaded: {PROBE_C_CH_CONFIG}")
-    PROBE_D_CH_CONFIG = os.getenv('PROBE_D_CH_CONFIG')
-    if PROBE_D_CH_CONFIG is None:
-        raise ValueError("PROBE_D_CH_CONFIG environment variable is not set. Please set it to the path of the probe D channel configuration file (e.g. 'probe_d_channels.csv').")
-    else:
-        print(f"PROBE_D_CH_CONFIG loaded: {PROBE_D_CH_CONFIG}")
-
-
-
-    # SET 3: Neuropixels File 2 Information
-    print('\n')
-    print('-- Second Neuropixels File --')
-    NP_FILE_01 = os.getenv('NP_FILE_01')
-    if NP_FILE_01 is None:
-        raise ValueError("NP_FILE_01 environment variable is not set. Please set it to the path of the neuropixels file.")
-    else:
-        print(f"NP_FILE loaded: {NP_FILE_01}")
-    NWB_FILE_01 = os.getenv('NWB_FILE_01')
-    if NWB_FILE_01 is None:
-        raise ValueError("NWB_FILE_01 environment variable is not set. Please set it to the path of the NWB file.")
-    else:
-        print(f"NWB_FILE loaded: {NWB_FILE_01}")
-    DATE_01 = os.getenv('DATE_01')
-    if DATE_01 is None:
-        raise ValueError("DATE_01 environment variable is not set. Please set it to the date of the recording in MMDD format.")
-    else:
-        print(f"DATE_01 loaded: {DATE_01}")
-    SESSION_01 = os.getenv('SESSION_01')
-    if SESSION_01 is None:
-        raise ValueError("SESSION_01 environment variable is not set. Please set it to the session number in MMDD format.")
-    else:
-        print(f"SESSION_01 loaded: {SESSION_01}")
-    BOMBCELL_01 = os.getenv('BOMBCELL_01')
-    if BOMBCELL_01 is None:
-        raise ValueError("BOMBCELL_01 environment variable is not set. Please set it to the label of the bombcell cluster (e.g. 'putative_bombcell').")
-    else:
-        print(f"BOMBCELL_01 loaded: {BOMBCELL_01}")
-    PROBE_A_CH_CONFIG_01 = os.getenv('PROBE_A_CH_CONFIG_01')
-    if PROBE_A_CH_CONFIG_01 is None:
-        raise ValueError("PROBE_A_CH_CONFIG_01 environment variable is not set. Please set it to the path of the probe A channel configuration file (e.g. 'probe_a_channels.csv').")
-    else:
-        print(f"PROBE_A_CH_CONFIG_01 loaded: {PROBE_A_CH_CONFIG_01}")
-    PROBE_C_CH_CONFIG_01 = os.getenv('PROBE_C_CH_CONFIG_01')
-    if PROBE_C_CH_CONFIG_01 is None:
-        raise ValueError("PROBE_C_CH_CONFIG_01 environment variable is not set. Please set it to the path of the probe C channel configuration file (e.g. 'probe_c_channels.csv').")
-    else:
-        print(f"PROBE_C_CH_CONFIG_01 loaded: {PROBE_C_CH_CONFIG_01}")
-    PROBE_D_CH_CONFIG_01 = os.getenv('PROBE_D_CH_CONFIG_01')
-    if PROBE_D_CH_CONFIG_01 is None:
-        raise ValueError("PROBE_D_CH_CONFIG_01 environment variable is not set. Please set it to the path of the probe D channel configuration file (e.g. 'probe_d_channels.csv').")
-    else:
-        print(f"PROBE_D_CH_CONFIG_01 loaded: {PROBE_D_CH_CONFIG_01}")
-
-    # SET 4: Neuropixels File 3 Information
-    print('\n')
-    print('-- Third Neuropixels File --')
-    NP_FILE_02 = os.getenv('NP_FILE_02')
-    if NP_FILE_02 is None:
-        raise ValueError("NP_FILE_02 environment variable is not set. Please set it to the path of the second neuropixels file.")
-    else:
-        print(f"NP_FILE_02 loaded: {NP_FILE_02}")
-    NWB_FILE_02 = os.getenv('NWB_FILE_02')
-    if NWB_FILE_02 is None:
-        raise ValueError("NWB_FILE_02 environment variable is not set. Please set it to the path of the second NWB file.")
-    else:
-        print(f"NWB_FILE_02 loaded: {NWB_FILE_02}")
-    DATE_02 = os.getenv('DATE_02')
-    if DATE_02 is None:
-        raise ValueError("DATE_02 environment variable is not set. Please set it to the date of the recording in MMDD format.")
-    else:
-        print(f"DATE_02 loaded: {DATE_02}")
-    SESSION_02 = os.getenv('SESSION_02')
-    if SESSION_02 is None:
-        raise ValueError("SESSION_02 environment variable is not set. Please set it to the session number in MMDD format.")
-    else:
-        print(f"SESSION_02 loaded: {SESSION_02}")
-    BOMBCELL_02 = os.getenv('BOMBCELL_02')
-    if BOMBCELL_02 is None:
-        raise ValueError("BOMBCELL_02 environment variable is not set. Please set it to the label of the bombcell cluster (e.g. 'putative_bombcell').")
-    else:
-        print(f"BOMBCELL_02 loaded: {BOMBCELL_02}")
-    PROBE_A_CH_CONFIG_02 = os.getenv('PROBE_A_CH_CONFIG_02')
-    if PROBE_A_CH_CONFIG_02 is None:
-        raise ValueError("PROBE_A_CH_CONFIG_02 environment variable is not set. Please set it to the path of the probe A channel configuration file (e.g. 'probe_a_channels.csv').")
-    else:
-        print(f"PROBE_A_CH_CONFIG_02 loaded: {PROBE_A_CH_CONFIG_02}")
-    PROBE_C_CH_CONFIG_02 = os.getenv('PROBE_C_CH_CONFIG_02')
-    if PROBE_C_CH_CONFIG_02 is None:
-        raise ValueError("PROBE_C_CH_CONFIG_02 environment variable is not set. Please set it to the path of the probe C channel configuration file (e.g. 'probe_c_channels.csv').")
-    else:
-        print(f"PROBE_C_CH_CONFIG_02 loaded: {PROBE_C_CH_CONFIG_02}")
-    PROBE_D_CH_CONFIG_02 = os.getenv('PROBE_D_CH_CONFIG_02')
-    if PROBE_D_CH_CONFIG_02 is None:
-        raise ValueError("PROBE_D_CH_CONFIG_02 environment variable is not set. Please set it to the path of the probe D channel configuration file (e.g. 'probe_d_channels.csv').")
-    else:
-        print(f"PROBE_D_CH_CONFIG_02 loaded: {PROBE_D_CH_CONFIG_02}")
-    
-
-    return {
-        'MOUSE': MOUSE,
-        'BEHAVIORAL_FOLDER': BEHAVIORAL_FOLDER,
-
-        'NP_FILE': NP_FILE,
-        'DATE': DATE,
-        'SESSION': SESSION,
-        'BOMBCELL': BOMBCELL,
-        'NWB_FILE': NWB_FILE,
-        'PROBE_A_CH_CONFIG': PROBE_A_CH_CONFIG,
-        'PROBE_C_CH_CONFIG': PROBE_C_CH_CONFIG,
-        'PROBE_D_CH_CONFIG': PROBE_D_CH_CONFIG,
-
-        'NP_FILE_01': NP_FILE_01,
-        'DATE_01': DATE_01,
-        'SESSION_01': SESSION_01,
-        'BOMBCELL_01': BOMBCELL_01,
-        'NWB_FILE_01': NWB_FILE_01,
-        'PROBE_A_CH_CONFIG_01': PROBE_A_CH_CONFIG_01,
-        'PROBE_C_CH_CONFIG_01': PROBE_C_CH_CONFIG_01,
-        'PROBE_D_CH_CONFIG_01': PROBE_D_CH_CONFIG_01,
-
-        'NP_FILE_02': NP_FILE_02,
-        'DATE_02': DATE_02,
-        'SESSION_02': SESSION_02,
-        'BOMBCELL_02': BOMBCELL_02,
-        'NWB_FILE_02': NWB_FILE_02,
-        'PROBE_A_CH_CONFIG_02': PROBE_A_CH_CONFIG_02,
-        'PROBE_C_CH_CONFIG_02': PROBE_C_CH_CONFIG_02,
-        'PROBE_D_CH_CONFIG_02': PROBE_D_CH_CONFIG_02,
-    }
-
-def build_session_grant_config(
-    session_data_dic: dict[str, Any],
-    *,
-    session_selection: int = 1,
-    mouse_root: str | Path | None = None,
-    config_filename: str | None = None,
-    verbose: bool = True,
-) -> tuple[Path, dict[str, Any]]:
-    suffix = _session_suffix(session_selection)
-    mouse = str(session_data_dic["MOUSE"]).strip()
-    recording_name = str(session_data_dic[f"NP_FILE{suffix}"]).strip()
-    nwb_file = str(session_data_dic.get(f"NWB_FILE{suffix}", "")).strip()
-    date_value = str(session_data_dic.get(f"DATE{suffix}", "")).strip()
-    session_value = str(session_data_dic.get(f"SESSION{suffix}", "")).strip()
-    bombcell_value = str(session_data_dic.get(f"BOMBCELL{suffix}", "")).strip()
-
-    resolved_mouse_root = _resolve_mouse_root(mouse, mouse_root=mouse_root)
-    config_dir = resolved_mouse_root / "configs"
-    config_dir.mkdir(parents=True, exist_ok=True)
-
-    cfg = _load_config_template(config_dir)
-    cfg["recording_name"] = recording_name
-    cfg["recordings_root"] = str(
-        session_data_dic.get("RECORDINGS_ROOT", DEFAULT_RECORDINGS_ROOT)
-    ).replace("\\", "/")
-    cfg["open_ephys_continuous_subpath"] = str(
-        session_data_dic.get("OPEN_EPHYS_CONTINUOUS_SUBPATH", DEFAULT_OPEN_EPHYS_CONTINUOUS_SUBPATH)
-    )
-    cfg["structure_oebin_subpath"] = str(
-        session_data_dic.get("STRUCTURE_OEBIN_SUBPATH", DEFAULT_STRUCTURE_OEBIN_SUBPATH)
-    )
-
-    run_dates = str(session_data_dic.get("RUN_DATES", "")).strip()
-    cfg["run_dates"] = run_dates or datetime.now().strftime("%Y%m%d")
-
-    cfg["np20_probes"] = _parse_probe_csv(
-        session_data_dic.get("NP20_PROBES"),
-        fallback=[str(p) for p in cfg.get("np20_probes", ["A", "C", "D"])],
-    )
-
-    results_path = str(session_data_dic.get("RESULTS_PATH", "")).strip()
-    if results_path:
-        cfg["results_path"] = results_path
-    elif "results_path" in cfg and str(cfg["results_path"]).strip() == "":
-        cfg.pop("results_path", None)
-
-    cfg["generated_from_env"] = {
-        "generated_at": datetime.now().isoformat(timespec="seconds"),
-        "session_selection": session_selection,
-        "mouse": mouse,
-        "behavioral_folder": str(session_data_dic.get("BEHAVIORAL_FOLDER", "")).strip(),
-        "date": date_value,
-        "session": session_value,
-        "nwb_file": nwb_file,
-        "bombcell_folder": bombcell_value,
-    }
-
-    if config_filename is None:
-        tag = _session_tag(date_value, session_value, session_selection)
-        config_filename = f"grant_recording_config_{tag}.json"
-    config_path = config_dir / config_filename
-    config_path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
-
-    if verbose:
-        print("\n=============================================")
-        print("AUTO-GENERATED SESSION CONFIG")
-        print("=============================================\n")
-        print(f"Session selection: {session_selection}")
-        print(f"Mouse root: {resolved_mouse_root}")
-        print(f"Recording name: {recording_name}")
-        print(f"Wrote config: {config_path}")
-
-    return config_path, cfg
-
-
-def session_to_analyze(MOUSE=None,BEHAVIORAL_FOLDER=None,
-                    NP_FILE=None,NWB_FILE=None, DATE=None, SESSION=None, BOMBCELL=None,PROBE_A_CH_CONFIG=None,PROBE_C_CH_CONFIG=None,PROBE_D_CH_CONFIG=None,
-                    NP_FILE_01=None,NWB_FILE_01=None ,DATE_01=None, SESSION_01=None, BOMBCELL_01=None,PROBE_A_CH_CONFIG_01=None,PROBE_C_CH_CONFIG_01=None,PROBE_D_CH_CONFIG_01=None,
-                    NP_FILE_02=None,NWB_FILE_02=None ,DATE_02=None, SESSION_02=None, BOMBCELL_02=None,PROBE_A_CH_CONFIG_02=None,PROBE_C_CH_CONFIG_02=None,PROBE_D_CH_CONFIG_02=None,
-                    session_selection=1):
-    # Change these for the specific session you want to analyze
-    if session_selection is None:
-        raise ValueError("session_selection parameter is not set. Please set it to 1, 2, or 3 depending on which session you want to analyze.")
-
-    MOUSE = MOUSE
-    BEHAVIORAL_FOLDER = BEHAVIORAL_FOLDER
-
-    if session_selection == 1:
-        NP_FILE = NP_FILE
-        NWB_FILE = NWB_FILE
-        DATE = DATE
-        SESSION = SESSION
-        BOMBCELL = BOMBCELL
-        PROBE_A_CH_CONFIG = PROBE_A_CH_CONFIG
-        PROBE_C_CH_CONFIG = PROBE_C_CH_CONFIG
-        PROBE_D_CH_CONFIG = PROBE_D_CH_CONFIG
-
-    if session_selection == 2:
-        NP_FILE = NP_FILE_01
-        NWB_FILE = NWB_FILE_01
-        DATE = DATE_01
-        SESSION = SESSION_01
-        BOMBCELL = BOMBCELL_01
-        PROBE_A_CH_CONFIG = PROBE_A_CH_CONFIG_01
-        PROBE_C_CH_CONFIG = PROBE_C_CH_CONFIG_01
-        PROBE_D_CH_CONFIG = PROBE_D_CH_CONFIG_01
-
-    if session_selection == 3:
-        NP_FILE = NP_FILE_02
-        NWB_FILE = NWB_FILE_02
-        DATE = DATE_02
-        SESSION = SESSION_02
-        BOMBCELL = BOMBCELL_02
-        PROBE_A_CH_CONFIG = PROBE_A_CH_CONFIG_02
-        PROBE_C_CH_CONFIG = PROBE_C_CH_CONFIG_02
-        PROBE_D_CH_CONFIG = PROBE_D_CH_CONFIG_02
-
-    print('\n=============================================')
-    print('SESSION SELECTION:')
-    print('=============================================\n')
-
-    print(f'NP_FILE: {NP_FILE}')
-    print(f'NWB_FILE: {NWB_FILE}')
-    print(f'DATE: {DATE}')
-    print(f'SESSION: {SESSION}')
-    print(f'BEHAVIORAL_FOLDER: {BEHAVIORAL_FOLDER}')
-    print(f'BOMBCELL: {BOMBCELL}')
-    print(f'PROBE_A_CH_CONFIG: {PROBE_A_CH_CONFIG}')
-    print(f'PROBE_C_CH_CONFIG: {PROBE_C_CH_CONFIG}')
-    print(f'PROBE_D_CH_CONFIG: {PROBE_D_CH_CONFIG}')
-
-    return MOUSE, BEHAVIORAL_FOLDER,PROBE_A_CH_CONFIG, PROBE_C_CH_CONFIG, PROBE_D_CH_CONFIG, NP_FILE, NWB_FILE, DATE, SESSION, BOMBCELL
-
-
-def _bundle_safe_name(value: Any) -> str:
-    s = str(value).strip()
-    if s == "":
-        return "bundle_latest"
-    s = re.sub(r'[\\/:*?"<>|]+', "_", s)
-    s = re.sub(r"\s+", "_", s)
-    s = re.sub(r"_+", "_", s).strip("._ ")
-    return s or "bundle_latest"
-
-
-def _infer_bundle_session_name(
-    *,
-    explicit_session_name: str | Path | None = None,
-    bombcell_root_for_auto_build: str | Path = "",
-    nwb_path_for_auto_build: str | Path = "",
-) -> str | None:
-    if explicit_session_name is not None and str(explicit_session_name).strip() != "":
-        return _bundle_safe_name(explicit_session_name)
-
-    bombcell_root = Path(str(bombcell_root_for_auto_build).strip()) if str(bombcell_root_for_auto_build).strip() != "" else None
-    if bombcell_root is not None:
-        parts = [p for p in bombcell_root.parts]
-        if "Kilosort_Recordings" in parts:
-            idx = parts.index("Kilosort_Recordings")
-            if idx + 1 < len(parts):
-                return _bundle_safe_name(parts[idx + 1])
-        if bombcell_root.parent.name:
-            return _bundle_safe_name(bombcell_root.parent.name)
-
-    nwb_path = Path(str(nwb_path_for_auto_build).strip()) if str(nwb_path_for_auto_build).strip() != "" else None
-    if nwb_path is not None:
-        if nwb_path.suffix:
-            return _bundle_safe_name(nwb_path.stem)
-        if nwb_path.name:
-            return _bundle_safe_name(nwb_path.name)
-
-    return None
-
-
-def resolve_processed_bundle_dir(
-    processed_bundle_dir: str | Path | None = None,
-    *,
-    session_name: str | Path | None = None,
-    nwb_path_for_auto_build: str | Path = "",
-    bombcell_root_for_auto_build: str | Path = "",
-) -> Path:
-    base = Path("processed_data") / "bundle_latest" if processed_bundle_dir is None else Path(processed_bundle_dir)
-    session_key = _infer_bundle_session_name(
-        explicit_session_name=session_name,
-        bombcell_root_for_auto_build=bombcell_root_for_auto_build,
-        nwb_path_for_auto_build=nwb_path_for_auto_build,
-    )
-    if session_key is None:
-        return base
-
-    if base.name == "bundle_latest":
-        return base.parent / session_key
-    return base
-
-
-def setup_paths_and_verify(PROBES=['A', 'B', 'C', 'D', 'E', 'F'], NWB_FILE=None, NP_FILE=None, DATE=None, SESSION=None, BEHAVIORAL_FOLDER=None, BOMBCELL=None):
-    # SET #1: Path to the NWB file for this session (on the neural data computer)
-    NWB_PATH = Path(fr"H:\Grant\Neuropixel_Analysis\NWB\{NWB_FILE}")
-
-    # SET #2: Path to the bombcell root folder for this session (on the neural data computer)
-    BOMBCELL_ROOT_FOR_AUTO_BUILD = Path(fr"H:\Grant\Neuropixel_Analysis\BOMBCELL\{NP_FILE}\{BOMBCELL}")
-
-    # SET #2: Validate bombcell root path and expected folder structure
-    for probes in PROBES:
-        expected_probe_folder = BOMBCELL_ROOT_FOR_AUTO_BUILD / f"kilosort4_{probes}"
-        if not expected_probe_folder.exists():
-            raise FileNotFoundError(
-                f"Expected to find bombcell data for probe {probes} at {expected_probe_folder}, but it does not exist. "
-                "Please check that BOMBCELL_ROOT_FOR_AUTO_BUILD is set correctly and that the folder structure matches the expected format."
-            )
-        else:
-            print(f"✅ Found bombcell data for probe {probes} at {expected_probe_folder}")
-
-    # SET #3 session name for labeling plots
-    SESSION_NAME = NP_FILE
-
-    # SET #4: Paths to trial index files (these are from the behavior video acquisition computer, not the neural data computer)
-    baseline_trials_index_path = rf"G:\Grant\behavior_data\DLC_net\{BEHAVIORAL_FOLDER}\videos\{DATE}\christielab\{SESSION}\{DATE}_christielab_{SESSION}_baseline_trial_numbers_tone2_aligned.npy"
-    washout_trials_index_path = rf"G:\Grant\behavior_data\DLC_net\{BEHAVIORAL_FOLDER}\videos\{DATE}\christielab\{SESSION}\{DATE}_christielab_{SESSION}_washout_trial_numbers_tone2_aligned.npy"
-    optoicalStim_trials_index_path = rf"G:\Grant\behavior_data\DLC_net\{BEHAVIORAL_FOLDER}\videos\{DATE}\christielab\{SESSION}\{DATE}_christielab_{SESSION}_stim_allowed_trial_numbers_tone2_aligned.npy"
-
-    CWD = Path.cwd().resolve()
-    DATA_SAVE_DIR = resolve_processed_bundle_dir(CWD / "processed_data" / "bundle_latest", session_name=NP_FILE).resolve()
-    DATA_SAVE_DIR.mkdir(parents=True, exist_ok=True)
-
-    print('\nCreating processed bundle directory if it does not exist...')
-    print("Kernel CWD:", CWD)
-    print("Processed bundle directory set to:", DATA_SAVE_DIR)
-    print("Exists now:", DATA_SAVE_DIR.exists())
-    print("Required files present:",
-        {fn: (DATA_SAVE_DIR / fn).exists() for fn in ("merged_dic.pkl", "stim_df.pkl", "pca_event_meta.pkl")})
-    print('\n')
-    if not DATA_SAVE_DIR.exists():
-        print(f"❌ Processed bundle directory not found at: {DATA_SAVE_DIR}")
-        raise FileNotFoundError("Processed bundle directory not found")
-    else:
-        print(f"✅ Processed bundle directory found at: {DATA_SAVE_DIR}")
-
-    # SET #5: Validate the NP session name and construct paths to data, with error handling
-    NP_ROOT_DIR = Path(r'H:\Grant\Neuropixels\Kilosort_Recordings') / SESSION_NAME
-    if not NP_ROOT_DIR.exists():
-        raise FileNotFoundError(
-            f"❌ Expected to find session data at {NP_ROOT_DIR}, but it does not exist. "
-            "Please check that SESSION_NAME is set correctly and that the folder structure matches the expected format."
-        )
-
-    if not os.path.exists(NP_ROOT_DIR):
-        print(f"❌ Session folder not found at: {NP_ROOT_DIR}")
-        raise FileNotFoundError("Session folder not found")
-    else:
-        print("\n✅ Neuropixel Session folder found")
-        print(f"Neuropixel Session folder: {NP_ROOT_DIR}\n")
-
-    if not os.path.exists(baseline_trials_index_path):
-        print(f"❌ Baseline trials index file not found at: {baseline_trials_index_path}")
-        raise FileNotFoundError("Baseline trials index file not found")
-    if not os.path.exists(washout_trials_index_path):
-        print(f"❌ Washout trials index file not found at: {washout_trials_index_path}")
-        raise FileNotFoundError("Washout trials index file not found")
-    if not os.path.exists(optoicalStim_trials_index_path):
-        print(f"❌ Optoical stim trials index file not found at: {optoicalStim_trials_index_path}")
-        raise FileNotFoundError("Optoical stim trials index file not found")
-    else:
-        print("✅ All behavior trial index files found")
-        print(f"Baseline trials index file: {baseline_trials_index_path}")
-        print(f"Washout trials index file: {washout_trials_index_path}")
-        print(f"Optoical stim trials index file: {optoicalStim_trials_index_path}\n")
-    #File existence checks
-    if not os.path.exists(NWB_PATH):
-        print(f"❌ NWB file not found at: {NWB_PATH}")
-        raise FileNotFoundError("NWB file not found")
-    if not os.path.exists(BOMBCELL_ROOT_FOR_AUTO_BUILD):
-        print(f"❌ Bombcell root folder not found at: {BOMBCELL_ROOT_FOR_AUTO_BUILD}")
-        raise FileNotFoundError("Bombcell root folder not found")
-    else:
-        print("✅ All NWB and Bombcell files found")
-        print(f"NWB file: {NWB_PATH}")
-        print(f"Bombcell root folder: {BOMBCELL_ROOT_FOR_AUTO_BUILD}\n")
-
-    return {'NP_ROOT_DIR': NP_ROOT_DIR, 'NWB_PATH': NWB_PATH, 'BOMBCELL_ROOT_FOR_AUTO_BUILD': BOMBCELL_ROOT_FOR_AUTO_BUILD, 'baseline_trials_index_path': baseline_trials_index_path, 'washout_trials_index_path': washout_trials_index_path, 'optoicalStim_trials_index_path': optoicalStim_trials_index_path, 'SESSION_NAME': SESSION_NAME, 'DATA_SAVE_DIR': DATA_SAVE_DIR}

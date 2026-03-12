@@ -28,3 +28,5 @@ wheels/
 *.egg
 .claude/
 py_bombcell/.claude/
+*processed_data/
+*processed_data_01/

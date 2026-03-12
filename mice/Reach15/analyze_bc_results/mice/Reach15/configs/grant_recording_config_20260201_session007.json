@@ -8,9 +8,9 @@
     "C",
     "D"
   ],
-  "run_dates": "20260309",
+  "run_dates": "20260312",
   "generated_from_env": {
-    "generated_at": "2026-03-09T19:45:08",
+    "generated_at": "2026-03-12T14:19:20",
     "session_selection": 3,
     "mouse": "Reach15",
     "behavioral_folder": "grant_reach15_swingDoor-christie",

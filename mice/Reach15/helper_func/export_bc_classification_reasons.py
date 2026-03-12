@@ -11,7 +11,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from helper_func.grant_config import load_grant_config  # noqa: E402
-from helper_func.nwb_data_prep import build_session_grant_config, load_env  # noqa: E402
+from mice.Reach15.helper_func.nwb_data_prep_v2 import build_session_grant_config, load_env  # noqa: E402
 
 
 SESSION_SUFFIX = {1: "", 2: "_01", 3: "_02"}

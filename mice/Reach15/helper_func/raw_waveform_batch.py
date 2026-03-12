@@ -7,11 +7,16 @@ from typing import Any
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from pathlib import Path
+import sys
+import pandas as pd
+# from helper_func.grant_config import load_grant_config
+# from helper_func.nwb_data_prep import build_session_grant_config, load_env
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from helper_func.grant_config import load_grant_config, notebook_runtime_context  # noqa: E402
 from helper_func.grant_config import load_grant_config
-from helper_func.nwb_data_prep import build_session_grant_config, load_env
-
-
+from mice.Reach15.helper_func.nwb_data_prep_v2 import build_session_grant_config, load_env
 SESSION_SUFFIX = {1: "", 2: "_01", 3: "_02"}
 
 
@@ -344,6 +349,7 @@ def save_cluster_waveform_plots(
     ignore_edges_s: float = 1.0,
     center_chan: int | None = None,
     qm_df: pd.DataFrame | None = None,
+    show: bool = False,
 ) -> dict[str, Any]:
     mean_output_dir.mkdir(parents=True, exist_ok=True)
     overlay_output_dir.mkdir(parents=True, exist_ok=True)
@@ -384,15 +390,16 @@ def save_cluster_waveform_plots(
         dtype=dtype,
         seed=seed,
         ignore_edges_s=ignore_edges_s,
-        show=False,
+        show=show,
     )
 
     mean_path = mean_output_dir / f"probe_{probe}_cluster_{int(cluster_id):04d}_raw_mean.png"
     overlay_path = overlay_output_dir / f"probe_{probe}_cluster_{int(cluster_id):04d}_raw_overlay.png"
     fig_mean.savefig(mean_path, dpi=220, bbox_inches="tight")
     fig_overlay.savefig(overlay_path, dpi=220, bbox_inches="tight")
-    plt.close(fig_overlay)
-    plt.close(fig_mean)
+    if not show:
+        plt.close(fig_overlay)
+        plt.close(fig_mean)
 
     meta.update(
         {
@@ -478,6 +485,7 @@ def render_raw_waveform_batch(
                     seed=seed,
                     ignore_edges_s=ignore_edges_s,
                     qm_df=qm_df,
+                    show=False,
                 )
                 meta["status"] = "OK"
                 if qm_df is not None and "cluster_id" in qm_df.columns:
@@ -503,4 +511,84 @@ def render_raw_waveform_batch(
     summary_df = pd.DataFrame(rows)
     summary_path = output_root / "raw_waveform_plot_summary.csv"
     summary_df.to_csv(summary_path, index=False)
+    return summary_df, output_root
+
+
+def render_single_raw_waveform(
+    bombcell_root: Path,
+    raw_path_by_probe: dict[str, Path],
+    *,
+    probe: str,
+    cluster_id: int,
+    output_subdir: str | None = None,
+    n_channels: int = 384,
+    fs: int = 30000,
+    neighbor_radius: int = 6,
+    n_spikes_to_plot: int = 40,
+    pre_ms: float = 2.0,
+    post_ms: float = 3.0,
+    dtype: Any = np.int16,
+    seed: int = 0,
+    ignore_edges_s: float = 1.0,
+    show: bool = True,
+) -> tuple[pd.DataFrame, Path]:
+    probe = str(probe).strip().upper()
+    probe_contexts = collect_probe_contexts(
+        bombcell_root=bombcell_root,
+        raw_path_by_probe=raw_path_by_probe,
+        probes=[probe],
+    )
+    output_root = bombcell_root if output_subdir in (None, "", ".") else bombcell_root / output_subdir
+    output_root.mkdir(parents=True, exist_ok=True)
+    mean_root = output_root / "raw_mean" / f"Probe_{probe}"
+    overlay_root = output_root / "raw_overlay" / f"Probe_{probe}"
+
+    context = probe_contexts[probe]
+    ks_dir = context["ks_dir"]
+    bin_path = context["bin_path"]
+    qm_df = load_probe_quality_metrics(ks_dir, probe)
+
+    try:
+        meta = save_cluster_waveform_plots(
+            ks_dir=ks_dir,
+            bin_path=bin_path,
+            cluster_id=int(cluster_id),
+            mean_output_dir=mean_root,
+            overlay_output_dir=overlay_root,
+            probe=probe,
+            n_channels=n_channels,
+            fs=fs,
+            neighbor_radius=neighbor_radius,
+            n_spikes_to_plot=n_spikes_to_plot,
+            pre_ms=pre_ms,
+            post_ms=post_ms,
+            dtype=dtype,
+            seed=seed,
+            ignore_edges_s=ignore_edges_s,
+            qm_df=qm_df,
+            show=show,
+        )
+        meta["status"] = "OK"
+        if qm_df is not None and "cluster_id" in qm_df.columns:
+            cluster_ids_num = pd.to_numeric(qm_df["cluster_id"], errors="coerce")
+            sub = qm_df.loc[cluster_ids_num == int(cluster_id)]
+            if not sub.empty:
+                for column in ["Bombcell_unit_type", "bombcell_label", "rawAmplitude", "signalToNoiseRatio", "nSpikes", "maxChannels"]:
+                    if column in sub.columns:
+                        meta[column] = sub.iloc[0][column]
+        summary_df = pd.DataFrame([meta])
+    except Exception as exc:
+        summary_df = pd.DataFrame(
+            [
+                {
+                    "probe": probe,
+                    "cluster_id": int(cluster_id),
+                    "status": "FAILED",
+                    "error": repr(exc),
+                    "ks_dir": str(ks_dir),
+                    "bin_path": str(bin_path),
+                }
+            ]
+        )
+
     return summary_df, output_root
